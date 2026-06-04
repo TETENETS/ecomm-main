@@ -12,9 +12,9 @@ import {
   Image as ImageIcon 
 } from 'lucide-react';
 
-// API Config
+// API Config http://localhoost:
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
+  baseURL: import.meta.env.DEV ? 'https://0k8dzv6r-3001.use2.devtunnels.ms/api' : '/api'
 });
 
 api.interceptors.request.use(config => {
@@ -280,7 +280,7 @@ const Products = () => {
               <tr key={p.id} className="border-t">
                 <td className="p-4 flex items-center gap-3">
                   {p.imageUrl ? 
-                    <img src={import.meta.env.DEV ? `http://localhost:3001${p.imageUrl}` : p.imageUrl} className="w-10 h-10 rounded object-cover bg-gray-100" /> 
+                    <img src={import.meta.env.DEV ? `https://0k8dzv6r-3001.use2.devtunnels.ms${p.imageUrl}` : p.imageUrl} className="w-10 h-10 rounded object-cover bg-gray-100" /> 
                     : <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-400"><ImageIcon size={20}/></div>
                   }
                   <span className="font-bold">{p.name}</span>
@@ -302,10 +302,6 @@ const Products = () => {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('adminToken'));
 
-  if (!isAuthenticated) {
-    return <Login setAuth={setIsAuthenticated} />;
-  }
-
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     setIsAuthenticated(false);
@@ -313,21 +309,30 @@ function App() {
 
   return (
     <Router>
-      <div className="flex min-h-screen bg-gray-100">
-        <Sidebar onLogout={handleLogout} />
-        <div className="flex-1 flex flex-col">
-          <header className="bg-white h-16 shadow-sm flex items-center justify-end px-6 border-b border-gray-200">
-            <span className="font-bold text-gray-600">Admin</span>
-          </header>
-          <main className="p-8 flex-1 overflow-y-auto">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="*" element={<div>En construcción... (Falta Órdenes y Finanzas)</div>} />
-            </Routes>
-          </main>
+      {/* Si NO está autenticado, mostramos SOLO la pantalla de Login dentro del Router */}
+      {!isAuthenticated ? (
+        <Routes>
+          <Route path="*" element={<Login setAuth={setIsAuthenticated} />} />
+        </Routes>
+      ) : (
+        /* Si SÍ está autenticado, mostramos todo el panel de administración */
+        <div className="flex min-h-screen bg-gray-100">
+          <Sidebar onLogout={handleLogout} />
+          <div className="flex-1 flex flex-col">
+            <header className="bg-white h-16 shadow-sm flex items-center justify-end px-6 border-b border-gray-200">
+              <span className="font-bold text-gray-600">Admin</span>
+            </header>
+            <main className="p-8 flex-1 overflow-y-auto">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/products" element={<Products />} />
+                {/* Redirecciona cualquier ruta extraña al inicio */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </main>
+          </div>
         </div>
-      </div>
+      )}
     </Router>
   );
 }
