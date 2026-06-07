@@ -266,13 +266,51 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     
     const totalProducts = await prisma.product.count();
 
+    // Top Products (calculate from OrderItem or just send some products for now)
+    const products = await prisma.product.findMany({
+      include: { orderItems: true },
+      take: 5
+    });
+    
+    const topProducts = products.map(p => {
+      const sales = p.orderItems.reduce((acc, curr) => acc + curr.quantity, 0);
+      return {
+        id: p.id,
+        name: p.name,
+        price: p.price || 0,
+        stock: p.stock,
+        sales: sales
+      };
+    }).sort((a, b) => b.sales - a.sales);
+
+    // Recent Pending Orders
+    const pendingOrdersRaw = await prisma.order.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      take: 50 // We want up to 50 for the paginated table (client handles pagination)
+    });
+    
+    const pendingOrders = pendingOrdersRaw.map(o => ({
+      id: `ORD-${o.id}`,
+      realId: o.id,
+      date: o.createdAt.toLocaleDateString(),
+      customer: o.customerName,
+      total: Number(o.totalAmount).toFixed(2),
+      status: o.status
+    }));
+
     res.json({
-      totalOrders,
-      totalEarnings,
-      totalExpenses,
-      totalProducts
+      metrics: {
+        totalOrders,
+        totalEarnings,
+        totalExpenses,
+        totalProducts
+      },
+      topProducts,
+      pendingOrders
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Error fetching metrics' });
   }
 });

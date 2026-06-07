@@ -28,6 +28,7 @@ model ProductVariant {
   name      String    // e.g., "Talla M - Rojo"
   price     Decimal   @db.Decimal(10, 2)
   stock     Int       @default(0)
+  imageUrl  String?   // Imagen específica de la variante
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

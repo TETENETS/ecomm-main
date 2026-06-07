@@ -39,35 +39,18 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Intentamos obtener las métricas base que ya existían
-      const resMetrics = await api.get('/dashboard');
-      setMetrics(resMetrics.data);
+      const res = await api.get('/dashboard');
+      if (res.data.metrics) {
+        setMetrics(res.data.metrics);
+        setTopProducts(res.data.topProducts || []);
+        setPendingOrders(res.data.pendingOrders || []);
+      } else {
+        // Fallback for older backend
+        setMetrics(res.data);
+      }
     } catch (e) {
-      console.error(e);
-      // Dummy data for visual representation in case backend endpoint is not ready
-      setMetrics({ totalOrders: 145, totalEarnings: 12500, totalExpenses: 2300, totalProducts: 48 });
+      console.error("Error fetching dashboard data:", e);
     }
-
-    // Datos simulados para Top Products
-    setTopProducts([
-      { id: 1, name: 'Zapatillas Deportivas', sales: 124, price: 45.00, stock: 12 },
-      { id: 2, name: 'Camiseta Básica', sales: 98, price: 15.00, stock: 45 },
-      { id: 3, name: 'Pantalón Jean', sales: 76, price: 35.00, stock: 8 },
-      { id: 4, name: 'Gorra Vintage', sales: 54, price: 12.00, stock: 20 },
-      { id: 5, name: 'Chaqueta de Cuero', sales: 32, price: 85.00, stock: 5 },
-    ]);
-
-    // Datos simulados para Órdenes Pendientes
-    const dummyOrders = Array.from({ length: 45 }, (_, i) => ({
-      id: `ORD-${1000 + i}`,
-      date: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toLocaleDateString(),
-      customer: `Cliente ${i + 1}`,
-      total: (Math.random() * 100 + 20).toFixed(2),
-      status: 'Pendiente'
-    }));
-    
-    // Ordenar de más reciente a más antiguo (simulado)
-    setPendingOrders(dummyOrders);
   };
 
   // Lógica de Paginación
