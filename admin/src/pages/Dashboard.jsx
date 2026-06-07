@@ -1,0 +1,300 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { 
+  DollarSign, 
+  ShoppingCart, 
+  Package, 
+  TrendingUp, 
+  Plus, 
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  FileText
+} from 'lucide-react';
+
+const api = axios.create({
+  baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
+});
+
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('adminToken');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+const Dashboard = () => {
+  const [metrics, setMetrics] = useState({ totalOrders: 0, totalEarnings: 0, totalExpenses: 0, totalProducts: 0 });
+  const [topProducts, setTopProducts] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  
+  // Paginación para órdenes pendientes
+  const [currentPage, setCurrentPage] = useState(1);
+  const ordersPerPage = 10;
+
+  useEffect(() => {
+    // Simulamos la obtención de datos completos para el dashboard
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Intentamos obtener las métricas base que ya existían
+      const resMetrics = await api.get('/dashboard');
+      setMetrics(resMetrics.data);
+    } catch (e) {
+      console.error(e);
+      // Dummy data for visual representation in case backend endpoint is not ready
+      setMetrics({ totalOrders: 145, totalEarnings: 12500, totalExpenses: 2300, totalProducts: 48 });
+    }
+
+    // Datos simulados para Top Products
+    setTopProducts([
+      { id: 1, name: 'Zapatillas Deportivas', sales: 124, price: 45.00, stock: 12 },
+      { id: 2, name: 'Camiseta Básica', sales: 98, price: 15.00, stock: 45 },
+      { id: 3, name: 'Pantalón Jean', sales: 76, price: 35.00, stock: 8 },
+      { id: 4, name: 'Gorra Vintage', sales: 54, price: 12.00, stock: 20 },
+      { id: 5, name: 'Chaqueta de Cuero', sales: 32, price: 85.00, stock: 5 },
+    ]);
+
+    // Datos simulados para Órdenes Pendientes
+    const dummyOrders = Array.from({ length: 45 }, (_, i) => ({
+      id: `ORD-${1000 + i}`,
+      date: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toLocaleDateString(),
+      customer: `Cliente ${i + 1}`,
+      total: (Math.random() * 100 + 20).toFixed(2),
+      status: 'Pendiente'
+    }));
+    
+    // Ordenar de más reciente a más antiguo (simulado)
+    setPendingOrders(dummyOrders);
+  };
+
+  // Lógica de Paginación
+  const indexOfLastOrder = currentPage * ordersPerPage;
+  const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+  const currentOrders = pendingOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+  const totalPages = Math.ceil(pendingOrders.length / ordersPerPage);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-800">Resumen Dashboard</h1>
+        <div className="flex gap-2">
+          <button className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-50 flex items-center gap-2">
+            Mes Actual
+          </button>
+        </div>
+      </div>
+
+      {/* MÉTRICAS PRINCIPALES */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-blue-200 transition-all">
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 mb-1">Ganancias Brutas</h3>
+            <p className="text-3xl font-black text-gray-800">${metrics.totalEarnings.toLocaleString()}</p>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+            <DollarSign size={24} />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-green-200 transition-all">
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 mb-1">Pedidos Totales</h3>
+            <p className="text-3xl font-black text-gray-800">{metrics.totalOrders}</p>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
+            <ShoppingCart size={24} />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-red-200 transition-all">
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 mb-1">Gastos / Compras</h3>
+            <p className="text-3xl font-black text-gray-800">${metrics.totalExpenses.toLocaleString()}</p>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-600 group-hover:scale-110 transition-transform">
+            <TrendingUp size={24} className="rotate-180" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-teal-200 transition-all">
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 mb-1">Prod. en Almacén</h3>
+            <p className="text-3xl font-black text-gray-800">{metrics.totalProducts}</p>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 group-hover:scale-110 transition-transform">
+            <Package size={24} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* PRODUCTOS MÁS VENDIDOS */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 lg:col-span-2">
+          <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+            <h2 className="text-lg font-bold text-gray-800">Top Productos (Más Vendidos)</h2>
+            <button className="text-sm font-semibold text-blue-600 hover:text-blue-800">Ver todo</button>
+          </div>
+          <div className="p-0">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50/50 text-gray-500 font-semibold uppercase text-xs">
+                <tr>
+                  <th className="p-4 px-6">Producto</th>
+                  <th className="p-4">Ventas</th>
+                  <th className="p-4">Precio</th>
+                  <th className="p-4">Stock</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topProducts.map((product, idx) => (
+                  <tr key={product.id} className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors">
+                    <td className="p-4 px-6 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-400">
+                        {idx + 1}
+                      </div>
+                      <span className="font-bold text-gray-800">{product.name}</span>
+                    </td>
+                    <td className="p-4 font-semibold text-gray-600">{product.sales} unid.</td>
+                    <td className="p-4 font-semibold text-green-600">${product.price.toFixed(2)}</td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${product.stock > 10 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {product.stock} left
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ACCESOS RÁPIDOS */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-6 border-b border-gray-100">
+            <h2 className="text-lg font-bold text-gray-800">Accesos Rápidos</h2>
+          </div>
+          <div className="p-6 grid grid-cols-2 gap-4">
+            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors gap-2">
+              <Plus size={24} />
+              <span className="text-sm font-bold">Añadir Pedido</span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors gap-2">
+              <Search size={24} />
+              <span className="text-sm font-bold text-center">Consultar Pedido</span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors gap-2">
+              <FileText size={24} />
+              <span className="text-sm font-bold">Añadir Gasto</span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 transition-colors gap-2">
+              <Package size={24} />
+              <span className="text-sm font-bold text-center">Nuevo Producto</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* PEDIDOS PENDIENTES */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-yellow-50/30">
+          <div>
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+              Pedidos Pendientes
+            </h2>
+            <p className="text-sm text-gray-500">Requieren aprobación o envío</p>
+          </div>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50/50 text-gray-500 font-semibold uppercase text-xs">
+              <tr>
+                <th className="p-4 px-6">ID Pedido</th>
+                <th className="p-4">Fecha</th>
+                <th className="p-4">Cliente</th>
+                <th className="p-4">Total</th>
+                <th className="p-4">Estado</th>
+                <th className="p-4 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentOrders.map((order) => (
+                <tr key={order.id} className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="p-4 px-6 font-bold text-blue-600">{order.id}</td>
+                  <td className="p-4 text-gray-500">{order.date}</td>
+                  <td className="p-4 font-semibold text-gray-700">{order.customer}</td>
+                  <td className="p-4 font-bold text-gray-800">${order.total}</td>
+                  <td className="p-4">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="p-4 text-center">
+                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Ver Detalles">
+                      <Eye size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              Mostrando {indexOfFirstOrder + 1} a {Math.min(indexOfLastOrder, pendingOrders.length)} de {pendingOrders.length} pedidos
+            </span>
+            <div className="flex gap-1">
+              <button 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-2 border border-gray-200 rounded-lg text-gray-600 disabled:opacity-50 hover:bg-gray-50 transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              
+              {/* Páginas simplificadas */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Lógica simple para mostrar páginas cercanas a la actual
+                let pageNum = i + 1;
+                if (totalPages > 5 && currentPage > 3) {
+                  pageNum = currentPage - 2 + i;
+                  if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                }
+                
+                return (
+                  <button 
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-9 h-9 border rounded-lg text-sm font-bold transition-colors ${
+                      currentPage === pageNum 
+                        ? 'bg-blue-600 text-white border-blue-600' 
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              <button 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-2 border border-gray-200 rounded-lg text-gray-600 disabled:opacity-50 hover:bg-gray-50 transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

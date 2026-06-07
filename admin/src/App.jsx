@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
+import Dashboard from './pages/Dashboard';
 import { 
   LayoutDashboard, 
   Package, 
@@ -120,38 +121,6 @@ const Sidebar = ({ onLogout }) => {
 };
 
 // --- PAGES ---
-
-const Dashboard = () => {
-  const [metrics, setMetrics] = useState({ totalOrders: 0, totalEarnings: 0, totalExpenses: 0, totalProducts: 0 });
-
-  useEffect(() => {
-    api.get('/dashboard').then(res => setMetrics(res.data)).catch(console.error);
-  }, []);
-
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-          <h3 className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Total Ganancias</h3>
-          <p className="text-2xl font-black text-gray-800">${metrics.totalEarnings.toLocaleString()}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
-          <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider mb-1">Total Órdenes</h3>
-          <p className="text-2xl font-black text-gray-800">{metrics.totalOrders}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500">
-          <h3 className="text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Total Gastos</h3>
-          <p className="text-2xl font-black text-gray-800">${metrics.totalExpenses.toLocaleString()}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-teal-500">
-          <h3 className="text-xs font-bold text-teal-500 uppercase tracking-wider mb-1">Productos</h3>
-          <p className="text-2xl font-black text-gray-800">{metrics.totalProducts}</p>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const Products = () => {
   const [products, setProducts] = useState([]);
