@@ -14,7 +14,7 @@ import {
 
 // API Config http://localhoost:
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? 'https://0k8dzv6r-3001.use2.devtunnels.ms/api' : '/api'
+  baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
 });
 
 api.interceptors.request.use(config => {
@@ -280,7 +280,7 @@ const Products = () => {
               <tr key={p.id} className="border-t">
                 <td className="p-4 flex items-center gap-3">
                   {p.imageUrl ? 
-                    <img src={import.meta.env.DEV ? `https://0k8dzv6r-3001.use2.devtunnels.ms${p.imageUrl}` : p.imageUrl} className="w-10 h-10 rounded object-cover bg-gray-100" /> 
+                    <img src={import.meta.env.DEV ? `http://localhost/${p.imageUrl}` : p.imageUrl} className="w-10 h-10 rounded object-cover bg-gray-100" /> 
                     : <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-400"><ImageIcon size={20}/></div>
                   }
                   <span className="font-bold">{p.name}</span>
