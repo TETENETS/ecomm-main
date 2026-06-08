@@ -88,13 +88,14 @@ app.get('/api/products', async (req, res) => {
 });
 
 // Admin Route
-app.post('/api/products', authMiddleware, upload.single('image'), async (req, res) => {
+app.post('/api/products', authMiddleware, upload.any(), async (req, res) => {
   try {
     const { name, description, price, stock, variants } = req.body;
     let imageUrl = null;
     
-    if (req.file) {
-      imageUrl = `/uploads/${req.file.filename}`;
+    const mainImageFile = req.files?.find(f => f.fieldname === 'image');
+    if (mainImageFile) {
+      imageUrl = `/uploads/${mainImageFile.filename}`;
     }
 
     // Parse variants if provided as string
@@ -102,6 +103,14 @@ app.post('/api/products', authMiddleware, upload.single('image'), async (req, re
     if (variants) {
       parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
     }
+
+    parsedVariants = parsedVariants.map((v, i) => {
+      const vImgFile = req.files?.find(f => f.fieldname === `variantImage_${i}`);
+      if (vImgFile) {
+        v.imageUrl = `/uploads/${vImgFile.filename}`;
+      }
+      return v;
+    });
 
     const product = await prisma.product.create({
       data: { 
@@ -114,7 +123,8 @@ app.post('/api/products', authMiddleware, upload.single('image'), async (req, re
           create: parsedVariants.map(v => ({
             name: v.name,
             price: parseFloat(v.price),
-            stock: parseInt(v.stock || 0)
+            stock: parseInt(v.stock || 0),
+            imageUrl: v.imageUrl || null
           }))
         }
       },
@@ -124,6 +134,74 @@ app.post('/api/products', authMiddleware, upload.single('image'), async (req, re
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error creating product' });
+  }
+});
+
+// Editar producto y reponer stock
+app.put('/api/products/:id', authMiddleware, upload.any(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, price, stock, variants } = req.body;
+    
+    const existingProduct = await prisma.product.findUnique({ where: { id: parseInt(id) } });
+    if (!existingProduct) return res.status(404).json({ error: 'Not found' });
+
+    let imageUrl = existingProduct.imageUrl;
+    const mainImageFile = req.files?.find(f => f.fieldname === 'image');
+    if (mainImageFile) {
+      imageUrl = `/uploads/${mainImageFile.filename}`;
+    }
+
+    let parsedVariants = [];
+    if (variants) {
+      parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
+    }
+
+    parsedVariants = parsedVariants.map((v, i) => {
+      const vImgFile = req.files?.find(f => f.fieldname === `variantImage_${i}`);
+      if (vImgFile) {
+        v.imageUrl = `/uploads/${vImgFile.filename}`;
+      }
+      return v;
+    });
+
+    // Delete old variants and recreate for simplicity
+    await prisma.productVariant.deleteMany({ where: { productId: parseInt(id) } });
+
+    const product = await prisma.product.update({
+      where: { id: parseInt(id) },
+      data: { 
+        name, 
+        description, 
+        price: price ? parseFloat(price) : null, 
+        stock: stock ? parseInt(stock) : 0,
+        imageUrl,
+        variants: {
+          create: parsedVariants.map(v => ({
+            name: v.name,
+            price: parseFloat(v.price),
+            stock: parseInt(v.stock || 0),
+            imageUrl: v.imageUrl || null
+          }))
+        }
+      },
+      include: { variants: true }
+    });
+    res.json(product);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error updating product' });
+  }
+});
+
+// Borrar producto
+app.delete('/api/products/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.product.delete({ where: { id: parseInt(id) } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting product' });
   }
 });
 

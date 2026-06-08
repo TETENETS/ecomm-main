@@ -18,6 +18,7 @@ const Inventory = () => {
   const [expandedProduct, setExpandedProduct] = useState(null);
   
   // Form State
+  const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
@@ -45,11 +46,51 @@ const Inventory = () => {
     newVars[index][field] = value;
     setVariants(newVars);
   };
+
+  const updateVariantImage = (index, file) => {
+    const newVars = [...variants];
+    newVars[index].image = file;
+    setVariants(newVars);
+  };
   
   const removeVariant = (index) => {
     const newVars = [...variants];
     newVars.splice(index, 1);
     setVariants(newVars);
+  };
+
+  const handleEdit = (product) => {
+    setEditingId(product.id);
+    setName(product.name);
+    setDescription(product.description || '');
+    setPrice(product.price || '');
+    setStock(product.stock || '');
+    setImage(null); // Clear file input, user can upload a new one if they want
+    
+    // Map variants, initializing image to null since we can't pre-fill File objects
+    const mappedVariants = product.variants ? product.variants.map(v => ({
+      name: v.name,
+      price: v.price,
+      stock: v.stock,
+      image: null,
+      existingImageUrl: v.imageUrl // To show user it has an image
+    })) : [];
+    
+    setVariants(mappedVariants);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Seguro que deseas eliminar este producto?")) {
+      try {
+        await api.delete(`/products/${id}`);
+        fetchProducts();
+      } catch (error) {
+        console.error("Error deleting product", error);
+        alert("Error al eliminar producto");
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -61,23 +102,38 @@ const Inventory = () => {
     if(stock) formData.append('stock', stock);
     if(image) formData.append('image', image);
     
-    // For variants with images, it would require multiple file uploads. 
-    // Simplified: we send variants as JSON, omitting their files for now in this iteration.
-    // In a full implementation, you'd append variant images to formData and map them.
     if(variants.length > 0) {
-      const variantsData = variants.map(v => ({ name: v.name, price: v.price, stock: v.stock }));
+      const variantsData = variants.map((v, i) => {
+        if (v.image) {
+          formData.append(`variantImage_${i}`, v.image);
+        }
+        return { name: v.name, price: v.price, stock: v.stock };
+      });
       formData.append('variants', JSON.stringify(variantsData));
+    } else {
+      // Si el usuario borró todas las variantes pero tenía, mandamos array vacío para que el backend las borre
+      formData.append('variants', JSON.stringify([]));
     }
 
     try {
-      await api.post('/products', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setShowForm(false);
+      if (editingId) {
+        await api.put(`/products/${editingId}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      } else {
+        await api.post('/products', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+      
+      resetForm();
       fetchProducts();
-      // Reset form
-      setName(''); setDescription(''); setPrice(''); setStock(''); setImage(null); setVariants([]);
     } catch (error) {
-      alert("Error al crear producto");
+      console.error(error);
+      alert("Error al guardar producto");
     }
+  };
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setName(''); setDescription(''); setPrice(''); setStock(''); setImage(null); setVariants([]);
   };
 
   const toggleExpand = (id) => {
@@ -89,7 +145,7 @@ const Inventory = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Inventario</h1>
         <button 
-          onClick={() => setShowForm(!showForm)} 
+          onClick={() => { resetForm(); setShowForm(true); }} 
           className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
         >
           <Plus size={20} /> Nuevo Producto
@@ -100,7 +156,7 @@ const Inventory = () => {
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-top-4 duration-300">
           <h2 className="text-xl font-black text-gray-800 mb-6 flex items-center gap-2">
             <Package className="text-blue-600" />
-            Añadir Nuevo Producto
+            {editingId ? 'Editar Producto' : 'Añadir Nuevo Producto'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -117,7 +173,7 @@ const Inventory = () => {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Imagen Principal</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Imagen Principal {editingId && '(Opcional: Subir nueva)'}</label>
                   <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-blue-400 transition-all cursor-pointer relative overflow-hidden group h-32">
                     <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => setImage(e.target.files[0])} />
                     {image ? (
@@ -172,10 +228,12 @@ const Inventory = () => {
                       <div className="w-24">
                         <input placeholder="Stock" type="number" className="w-full border border-gray-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
                       </div>
-                      {/* Placeholder for individual variant image upload */}
-                      <button type="button" className="p-2.5 text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors" title="Imagen específica para esta variante">
-                         <ImageIcon size={20} />
-                      </button>
+                      <div className="relative group/btn">
+                        <button type="button" className={`p-2.5 rounded-lg transition-colors overflow-hidden ${v.image || v.existingImageUrl ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`} title="Imagen específica para esta variante">
+                           <ImageIcon size={20} />
+                           <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => updateVariantImage(i, e.target.files[0])} />
+                        </button>
+                      </div>
                       <button type="button" onClick={() => removeVariant(i)} className="p-2.5 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
                         <Trash2 size={20} />
                       </button>
@@ -186,11 +244,11 @@ const Inventory = () => {
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-              <button type="button" onClick={() => setShowForm(false)} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
+              <button type="button" onClick={resetForm} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
                 Cancelar
               </button>
               <button type="submit" className="bg-green-600 text-white font-bold px-8 py-2.5 rounded-xl hover:bg-green-700 transition-colors shadow-sm">
-                Guardar Producto
+                {editingId ? 'Actualizar Producto' : 'Guardar Producto'}
               </button>
             </div>
           </form>
@@ -246,10 +304,10 @@ const Inventory = () => {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="Editar">
+                        <button onClick={() => handleEdit(p)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="Editar / Agregar Stock">
                           <Edit size={18} />
                         </button>
-                        <button className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Eliminar">
+                        <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Eliminar">
                           <Trash2 size={18} />
                         </button>
                       </div>
@@ -263,6 +321,7 @@ const Inventory = () => {
                           <table className="w-full text-sm">
                             <thead className="text-gray-400 text-xs uppercase font-bold border-b border-gray-200">
                               <tr>
+                                <th className="pb-2 text-left">Imagen</th>
                                 <th className="pb-2 text-left">Variación</th>
                                 <th className="pb-2 text-left">Stock</th>
                                 <th className="pb-2 text-left">Precio</th>
@@ -271,6 +330,12 @@ const Inventory = () => {
                             <tbody>
                               {p.variants.map(v => (
                                 <tr key={v.id} className="border-b border-gray-100/50 last:border-0">
+                                  <td className="py-3">
+                                    {v.imageUrl ? 
+                                      <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : v.imageUrl} className="w-8 h-8 rounded-md object-cover border border-gray-200" alt={v.name} />
+                                      : <span className="text-gray-400 text-xs italic">-</span>
+                                    }
+                                  </td>
                                   <td className="py-3 font-semibold text-gray-700">{v.name}</td>
                                   <td className="py-3 text-gray-600">{v.stock}</td>
                                   <td className="py-3 font-bold text-green-600">${Number(v.price).toFixed(2)}</td>
