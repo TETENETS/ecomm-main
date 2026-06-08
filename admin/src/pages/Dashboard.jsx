@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   DollarSign, 
@@ -24,6 +25,7 @@ api.interceptors.request.use(config => {
 });
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState({ totalOrders: 0, totalEarnings: 0, totalExpenses: 0, totalProducts: 0 });
   const [topProducts, setTopProducts] = useState([]);
   const [pendingOrders, setPendingOrders] = useState([]);
@@ -159,21 +161,21 @@ const Dashboard = () => {
             <h2 className="text-lg font-bold text-gray-800">Accesos Rápidos</h2>
           </div>
           <div className="p-6 grid grid-cols-2 gap-4">
-            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors gap-2">
+            <button onClick={() => navigate('/orders', { state: { newOrder: true } })} className="flex flex-col items-center justify-center p-4 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors gap-2">
               <Plus size={24} />
               <span className="text-sm font-bold">Añadir Pedido</span>
             </button>
-            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors gap-2">
+            <button onClick={() => navigate('/orders')} className="flex flex-col items-center justify-center p-4 rounded-xl bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors gap-2">
               <Search size={24} />
-              <span className="text-sm font-bold text-center">Consultar Pedido</span>
+              <span className="text-sm font-bold text-center">Ver Pedidos</span>
             </button>
-            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors gap-2">
+            <button onClick={() => navigate('/finances', { state: { newExpense: true } })} className="flex flex-col items-center justify-center p-4 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors gap-2">
               <FileText size={24} />
               <span className="text-sm font-bold">Añadir Gasto</span>
             </button>
-            <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 transition-colors gap-2">
+            <button onClick={() => navigate('/products')} className="flex flex-col items-center justify-center p-4 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 transition-colors gap-2">
               <Package size={24} />
-              <span className="text-sm font-bold text-center">Nuevo Producto</span>
+              <span className="text-sm font-bold text-center">Inventario</span>
             </button>
           </div>
         </div>

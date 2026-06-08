@@ -320,7 +320,10 @@ app.post('/api/checkout', async (req, res) => {
 // Admin Route
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
+    const { status } = req.query;
+    const where = status && status !== 'ALL' ? { status } : {};
     const orders = await prisma.order.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       include: { 
         items: {
@@ -333,6 +336,83 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Error fetching orders' });
   }
 });
+
+// Update order status
+app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const order = await prisma.order.update({
+      where: { id: parseInt(id) },
+      data: { status },
+      include: { items: { include: { product: true, variant: true } } }
+    });
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: 'Error updating order status' });
+  }
+});
+
+// Create manual order (admin)
+app.post('/api/orders', authMiddleware, async (req, res) => {
+  try {
+    const {
+      customerName, customerCedula, customerPhone, customerEmail,
+      locationAddress, items, notes
+    } = req.body;
+
+    let totalAmount = 0;
+    const orderItemsData = [];
+
+    for (const item of items) {
+      const product = await prisma.product.findUnique({ 
+        where: { id: item.productId },
+        include: { variants: true } 
+      });
+      if (!product) continue;
+      let price = product.price;
+      if (item.variantId) {
+        const variant = product.variants.find(v => v.id === item.variantId);
+        if (variant) price = variant.price;
+      }
+      totalAmount += parseFloat(price) * item.quantity;
+      orderItemsData.push({
+        productId: product.id,
+        productVariantId: item.variantId || null,
+        quantity: item.quantity,
+        price
+      });
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        customerName, customerCedula, customerPhone,
+        customerEmail: customerEmail || null,
+        locationAddress: locationAddress || null,
+        totalAmount,
+        status: 'PENDING',
+        items: { create: orderItemsData }
+      },
+      include: { items: { include: { product: true, variant: true } } }
+    });
+    res.status(201).json(order);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error creating order' });
+  }
+});
+
+// Delete expense
+app.delete('/api/expenses/:id', authMiddleware, async (req, res) => {
+  try {
+    await prisma.expense.delete({ where: { id: parseInt(req.params.id) } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting expense' });
+  }
+});
+
+
 
 
 // --- DASHBOARD METRICS ---

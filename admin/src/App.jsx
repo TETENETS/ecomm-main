@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Link, useNavigate, us
 import axios from 'axios';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
+import Orders from './pages/Orders';
+import Finances from './pages/Finances';
 import { 
   LayoutDashboard, 
   Package, 
@@ -154,6 +156,8 @@ function App() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/products" element={<Inventory />} />
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/finances" element={<Finances />} />
                 {/* Redirecciona cualquier ruta extraña al inicio */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
