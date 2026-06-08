@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronUp, DollarSign, Archive } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronUp, DollarSign, Archive, Loader2 } from 'lucide-react';
 
 const api = axios.create({
   baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
@@ -16,6 +16,8 @@ const Inventory = () => {
   const [products, setProducts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [expandedProduct, setExpandedProduct] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   
   // Form State
   const [editingId, setEditingId] = useState(null);
@@ -85,18 +87,22 @@ const Inventory = () => {
 
   const handleDelete = async (id) => {
     if (window.confirm("¿Seguro que deseas eliminar este producto?")) {
+      setDeletingId(id);
       try {
         await api.delete(`/products/${id}`);
         fetchProducts();
       } catch (error) {
         console.error("Error deleting product", error);
         alert("Error al eliminar producto");
+      } finally {
+        setDeletingId(null);
       }
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     const formData = new FormData();
     formData.append('name', name);
     formData.append('description', description);
@@ -129,6 +135,8 @@ const Inventory = () => {
     } catch (error) {
       console.error(error);
       alert("Error al guardar producto");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -140,6 +148,14 @@ const Inventory = () => {
 
   const toggleExpand = (id) => {
     setExpandedProduct(expandedProduct === id ? null : id);
+  };
+
+  // Helper to compute margin
+  const getMargin = (sale, cost) => {
+    const s = Number(sale) || 0;
+    const c = Number(cost) || 0;
+    if (c === 0) return null;
+    return s - c;
   };
 
   return (
@@ -155,7 +171,7 @@ const Inventory = () => {
       </div>
 
       {showForm && (
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-xl font-black text-gray-800 mb-6 flex items-center gap-2">
             <Package className="text-blue-600" />
             {editingId ? 'Editar Producto' : 'Añadir Nuevo Producto'}
@@ -196,15 +212,15 @@ const Inventory = () => {
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-1">Precio Compra</label>
                       <div className="relative">
-                        <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-9 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="0.00" />
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-bold">$</span>
+                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-8 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="0.00" />
                       </div>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-1">Precio Venta *</label>
                       <div className="relative">
-                        <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-9 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={price} onChange={e => setPrice(e.target.value)} required={variants.length === 0} placeholder="0.00" />
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 text-sm font-bold">$</span>
+                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-8 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={price} onChange={e => setPrice(e.target.value)} required={variants.length === 0} placeholder="0.00" />
                       </div>
                     </div>
                     <div>
@@ -232,46 +248,47 @@ const Inventory = () => {
               
               {variants.length > 0 && (
                 <div className="space-y-3">
-                  <div className="flex px-3 text-xs font-bold text-gray-500 uppercase hidden md:flex">
+                  {/* Column headers */}
+                  <div className="hidden md:flex px-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     <div className="flex-1 min-w-[150px]">Nombre Variante</div>
                     <div className="w-28 text-center">Costo Unit.</div>
                     <div className="w-28 text-center">Precio Venta</div>
-                    <div className="w-28 text-center">Stock</div>
-                    <div className="w-[100px]"></div>
+                    <div className="w-24 text-center">Stock</div>
+                    <div className="w-[88px]"></div>
                   </div>
                   {variants.map((v, i) => (
-                    <div key={i} className="flex flex-wrap md:flex-nowrap gap-3 items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
+                    <div key={i} className="flex flex-wrap md:flex-nowrap gap-3 items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex-1 min-w-[150px]">
-                        <input placeholder="Nombre Variante (Ej: Talla M - Rojo)" className="w-full border-none bg-gray-50 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" value={v.name} onChange={e => updateVariant(i, 'name', e.target.value)} required/>
+                        <input placeholder="Ej: Talla M - Rojo" className="w-full border-none bg-gray-50 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" value={v.name} onChange={e => updateVariant(i, 'name', e.target.value)} required/>
                       </div>
                       
                       {/* Cost Price */}
                       <div className="w-28 relative">
-                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input placeholder="Costo" type="number" step="0.01" className="w-full border border-gray-200 py-2.5 pl-8 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.costPrice} onChange={e => updateVariant(i, 'costPrice', e.target.value)} />
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">$</span>
+                        <input placeholder="Costo" type="number" step="0.01" className="w-full border border-gray-200 py-2.5 pl-7 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.costPrice} onChange={e => updateVariant(i, 'costPrice', e.target.value)} />
                       </div>
                       
                       {/* Sale Price */}
                       <div className="w-28 relative">
-                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" />
-                        <input placeholder="Venta" type="number" step="0.01" className="w-full border border-gray-200 py-2.5 pl-8 pr-2 rounded-lg text-sm font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none" value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} required/>
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-500 text-xs font-bold">$</span>
+                        <input placeholder="Venta" type="number" step="0.01" className="w-full border border-blue-200 bg-blue-50/30 py-2.5 pl-7 pr-2 rounded-lg text-sm font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none" value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} required/>
                       </div>
                       
                       {/* Stock */}
-                      <div className="w-28 relative">
-                        <Archive size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                        <input placeholder="Stock" type="number" className="w-full border border-gray-200 py-2.5 pl-8 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
+                      <div className="w-24 relative">
+                        <Archive size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input placeholder="Stock" type="number" className="w-full border border-gray-200 py-2.5 pl-7 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
                       </div>
 
                       <div className="flex items-center gap-1">
                         <div className="relative">
-                          <button type="button" className={`p-2.5 rounded-lg transition-colors overflow-hidden ${v.image || v.existingImageUrl ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`} title="Imagen de variante">
-                             <ImageIcon size={18} />
+                          <button type="button" className={`p-2 rounded-lg transition-colors overflow-hidden ${v.image || v.existingImageUrl ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`} title="Imagen de variante">
+                             <ImageIcon size={17} />
                              <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => updateVariantImage(i, e.target.files[0])} />
                           </button>
                         </div>
-                        <button type="button" onClick={() => removeVariant(i)} className="p-2.5 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
-                          <Trash2 size={18} />
+                        <button type="button" onClick={() => removeVariant(i)} className="p-2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                          <Trash2 size={17} />
                         </button>
                       </div>
                     </div>
@@ -284,8 +301,9 @@ const Inventory = () => {
               <button type="button" onClick={resetForm} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
                 Cancelar
               </button>
-              <button type="submit" className="bg-green-600 text-white font-bold px-8 py-2.5 rounded-xl hover:bg-green-700 transition-colors shadow-sm">
-                {editingId ? 'Actualizar Producto' : 'Guardar Producto'}
+              <button type="submit" disabled={saving} className="bg-green-600 text-white font-bold px-8 py-2.5 rounded-xl hover:bg-green-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+                {saving && <Loader2 size={18} className="animate-spin" />}
+                {saving ? 'Guardando...' : (editingId ? 'Actualizar Producto' : 'Guardar Producto')}
               </button>
             </div>
           </form>
@@ -300,7 +318,8 @@ const Inventory = () => {
               <th className="p-4">Producto</th>
               <th className="p-4">Stock Total</th>
               <th className="p-4">Costo</th>
-              <th className="p-4">Precio (Venta)</th>
+              <th className="p-4">Precio Venta</th>
+              <th className="p-4">Ganancia Unit.</th>
               <th className="p-4 text-center">Acciones</th>
             </tr>
           </thead>
@@ -311,6 +330,7 @@ const Inventory = () => {
                 : p.stock;
               const hasVariants = p.variants?.length > 0;
               const isExpanded = expandedProduct === p.id;
+              const margin = !hasVariants ? getMargin(p.price, p.costPrice) : null;
 
               return (
                 <React.Fragment key={p.id}>
@@ -338,18 +358,29 @@ const Inventory = () => {
                       </span>
                     </td>
                     <td className="p-4 text-gray-500">
-                      {hasVariants ? 'Múltiples' : (p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '-')}
+                      {hasVariants ? <span className="text-xs italic">Ver variaciones</span> : (p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : <span className="text-gray-300">-</span>)}
                     </td>
                     <td className="p-4 font-bold text-gray-800">
-                      {hasVariants ? 'Múltiples' : `$${Number(p.price).toFixed(2)}`}
+                      {hasVariants ? <span className="text-xs italic text-gray-500">Ver variaciones</span> : `$${Number(p.price || 0).toFixed(2)}`}
+                    </td>
+                    <td className="p-4">
+                      {hasVariants ? (
+                        <span className="text-xs italic text-gray-500">Ver variaciones</span>
+                      ) : margin !== null ? (
+                        <span className={`font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {margin >= 0 ? '+' : ''}${margin.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => handleEdit(p)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="Editar / Agregar Stock">
                           <Edit size={18} />
                         </button>
-                        <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Eliminar">
-                          <Trash2 size={18} />
+                        <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50" title="Eliminar">
+                          {deletingId === p.id ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
                         </button>
                       </div>
                     </td>
@@ -357,7 +388,7 @@ const Inventory = () => {
                   {/* Expanded Variants Row */}
                   {isExpanded && hasVariants && (
                     <tr className="bg-gray-50/50">
-                      <td colSpan="6" className="p-0 border-t border-gray-100">
+                      <td colSpan="7" className="p-0 border-t border-gray-100">
                         <div className="py-4 pl-24 pr-6">
                           <table className="w-full text-sm">
                             <thead className="text-gray-400 text-xs uppercase font-bold border-b border-gray-200">
@@ -365,30 +396,34 @@ const Inventory = () => {
                                 <th className="pb-2 text-left">Imagen</th>
                                 <th className="pb-2 text-left">Variación</th>
                                 <th className="pb-2 text-left">Stock</th>
-                                <th className="pb-2 text-left">Costo</th>
+                                <th className="pb-2 text-left">Costo Unit.</th>
                                 <th className="pb-2 text-left">Precio Venta</th>
-                                <th className="pb-2 text-left">Margen Est.</th>
+                                <th className="pb-2 text-left">Ganancia Unit.</th>
                               </tr>
                             </thead>
                             <tbody>
                               {p.variants.map(v => {
-                                const cost = Number(v.costPrice) || 0;
-                                const sale = Number(v.price) || 0;
-                                const margin = sale - cost;
+                                const vMargin = getMargin(v.price, v.costPrice);
                                 return (
                                   <tr key={v.id} className="border-b border-gray-100/50 last:border-0">
                                     <td className="py-3">
                                       {v.imageUrl ? 
                                         <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : v.imageUrl} className="w-8 h-8 rounded-md object-cover border border-gray-200" alt={v.name} />
-                                        : <span className="text-gray-400 text-xs italic">-</span>
+                                        : <span className="text-gray-300 text-xs">-</span>
                                       }
                                     </td>
                                     <td className="py-3 font-semibold text-gray-700">{v.name}</td>
                                     <td className="py-3 text-gray-600">{v.stock} unid.</td>
-                                    <td className="py-3 text-gray-500">{v.costPrice ? `$${cost.toFixed(2)}` : '-'}</td>
-                                    <td className="py-3 font-bold text-gray-800">${sale.toFixed(2)}</td>
-                                    <td className="py-3 font-bold text-green-600">
-                                      ${margin.toFixed(2)}
+                                    <td className="py-3 text-gray-500">{v.costPrice ? `$${Number(v.costPrice).toFixed(2)}` : <span className="text-gray-300">-</span>}</td>
+                                    <td className="py-3 font-bold text-gray-800">${Number(v.price).toFixed(2)}</td>
+                                    <td className="py-3">
+                                      {vMargin !== null ? (
+                                        <span className={`font-bold ${vMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          {vMargin >= 0 ? '+' : ''}${vMargin.toFixed(2)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-300">-</span>
+                                      )}
                                     </td>
                                   </tr>
                                 )
