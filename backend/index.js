@@ -90,7 +90,7 @@ app.get('/api/products', async (req, res) => {
 // Admin Route
 app.post('/api/products', authMiddleware, upload.any(), async (req, res) => {
   try {
-    const { name, description, price, stock, variants } = req.body;
+    const { name, description, price, costPrice, stock, variants } = req.body;
     let imageUrl = null;
     
     const mainImageFile = req.files?.find(f => f.fieldname === 'image');
@@ -117,12 +117,14 @@ app.post('/api/products', authMiddleware, upload.any(), async (req, res) => {
         name, 
         description, 
         price: price ? parseFloat(price) : null, 
+        costPrice: costPrice ? parseFloat(costPrice) : null,
         stock: stock ? parseInt(stock) : 0,
         imageUrl,
         variants: {
           create: parsedVariants.map(v => ({
             name: v.name,
             price: parseFloat(v.price),
+            costPrice: v.costPrice ? parseFloat(v.costPrice) : null,
             stock: parseInt(v.stock || 0),
             imageUrl: v.imageUrl || null
           }))
@@ -141,7 +143,7 @@ app.post('/api/products', authMiddleware, upload.any(), async (req, res) => {
 app.put('/api/products/:id', authMiddleware, upload.any(), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, stock, variants } = req.body;
+    const { name, description, price, costPrice, stock, variants } = req.body;
     
     const existingProduct = await prisma.product.findUnique({ where: { id: parseInt(id) } });
     if (!existingProduct) return res.status(404).json({ error: 'Not found' });
@@ -174,12 +176,14 @@ app.put('/api/products/:id', authMiddleware, upload.any(), async (req, res) => {
         name, 
         description, 
         price: price ? parseFloat(price) : null, 
+        costPrice: costPrice ? parseFloat(costPrice) : null,
         stock: stock ? parseInt(stock) : 0,
         imageUrl,
         variants: {
           create: parsedVariants.map(v => ({
             name: v.name,
             price: parseFloat(v.price),
+            costPrice: v.costPrice ? parseFloat(v.costPrice) : null,
             stock: parseInt(v.stock || 0),
             imageUrl: v.imageUrl || null
           }))

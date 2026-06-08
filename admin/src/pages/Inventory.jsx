@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronUp, DollarSign, Archive } from 'lucide-react';
 
 const api = axios.create({
   baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
@@ -22,6 +22,7 @@ const Inventory = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
+  const [costPrice, setCostPrice] = useState('');
   const [stock, setStock] = useState('');
   const [image, setImage] = useState(null);
   const [variants, setVariants] = useState([]);
@@ -39,7 +40,7 @@ const Inventory = () => {
     }
   };
 
-  const addVariant = () => setVariants([...variants, { name: '', price: '', stock: '', image: null }]);
+  const addVariant = () => setVariants([...variants, { name: '', price: '', costPrice: '', stock: '', image: null }]);
   
   const updateVariant = (index, field, value) => {
     const newVars = [...variants];
@@ -64,16 +65,17 @@ const Inventory = () => {
     setName(product.name);
     setDescription(product.description || '');
     setPrice(product.price || '');
+    setCostPrice(product.costPrice || '');
     setStock(product.stock || '');
-    setImage(null); // Clear file input, user can upload a new one if they want
+    setImage(null);
     
-    // Map variants, initializing image to null since we can't pre-fill File objects
     const mappedVariants = product.variants ? product.variants.map(v => ({
       name: v.name,
-      price: v.price,
-      stock: v.stock,
+      price: v.price || '',
+      costPrice: v.costPrice || '',
+      stock: v.stock || '',
       image: null,
-      existingImageUrl: v.imageUrl // To show user it has an image
+      existingImageUrl: v.imageUrl
     })) : [];
     
     setVariants(mappedVariants);
@@ -99,6 +101,7 @@ const Inventory = () => {
     formData.append('name', name);
     formData.append('description', description);
     if(price) formData.append('price', price);
+    if(costPrice) formData.append('costPrice', costPrice);
     if(stock) formData.append('stock', stock);
     if(image) formData.append('image', image);
     
@@ -107,11 +110,10 @@ const Inventory = () => {
         if (v.image) {
           formData.append(`variantImage_${i}`, v.image);
         }
-        return { name: v.name, price: v.price, stock: v.stock };
+        return { name: v.name, price: v.price, costPrice: v.costPrice, stock: v.stock };
       });
       formData.append('variants', JSON.stringify(variantsData));
     } else {
-      // Si el usuario borró todas las variantes pero tenía, mandamos array vacío para que el backend las borre
       formData.append('variants', JSON.stringify([]));
     }
 
@@ -133,7 +135,7 @@ const Inventory = () => {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setName(''); setDescription(''); setPrice(''); setStock(''); setImage(null); setVariants([]);
+    setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setVariants([]);
   };
 
   const toggleExpand = (id) => {
@@ -190,14 +192,27 @@ const Inventory = () => {
                 </div>
 
                 {variants.length === 0 && (
-                  <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="grid grid-cols-3 gap-4 pt-2">
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Precio ($) *</label>
-                      <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={price} onChange={e => setPrice(e.target.value)} required={variants.length === 0} placeholder="0.00" />
+                      <label className="block text-sm font-bold text-gray-700 mb-1">Precio Compra</label>
+                      <div className="relative">
+                        <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-9 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="0.00" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">Precio Venta *</label>
+                      <div className="relative">
+                        <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-9 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={price} onChange={e => setPrice(e.target.value)} required={variants.length === 0} placeholder="0.00" />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-1">Stock General *</label>
-                      <input type="number" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={stock} onChange={e => setStock(e.target.value)} required={variants.length === 0} placeholder="0" />
+                      <div className="relative">
+                        <Archive size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input type="number" className="w-full bg-gray-50 border border-gray-200 p-3 pl-9 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={stock} onChange={e => setStock(e.target.value)} required={variants.length === 0} placeholder="0" />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -217,26 +232,48 @@ const Inventory = () => {
               
               {variants.length > 0 && (
                 <div className="space-y-3">
+                  <div className="flex px-3 text-xs font-bold text-gray-500 uppercase hidden md:flex">
+                    <div className="flex-1 min-w-[150px]">Nombre Variante</div>
+                    <div className="w-28 text-center">Costo Unit.</div>
+                    <div className="w-28 text-center">Precio Venta</div>
+                    <div className="w-28 text-center">Stock</div>
+                    <div className="w-[100px]"></div>
+                  </div>
                   {variants.map((v, i) => (
-                    <div key={i} className="flex flex-wrap md:flex-nowrap gap-3 items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                      <div className="flex-1 min-w-[200px]">
+                    <div key={i} className="flex flex-wrap md:flex-nowrap gap-3 items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
+                      <div className="flex-1 min-w-[150px]">
                         <input placeholder="Nombre Variante (Ej: Talla M - Rojo)" className="w-full border-none bg-gray-50 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" value={v.name} onChange={e => updateVariant(i, 'name', e.target.value)} required/>
                       </div>
-                      <div className="w-32">
-                        <input placeholder="Precio ($)" type="number" step="0.01" className="w-full border border-gray-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} required/>
+                      
+                      {/* Cost Price */}
+                      <div className="w-28 relative">
+                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input placeholder="Costo" type="number" step="0.01" className="w-full border border-gray-200 py-2.5 pl-8 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.costPrice} onChange={e => updateVariant(i, 'costPrice', e.target.value)} />
                       </div>
-                      <div className="w-24">
-                        <input placeholder="Stock" type="number" className="w-full border border-gray-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
+                      
+                      {/* Sale Price */}
+                      <div className="w-28 relative">
+                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" />
+                        <input placeholder="Venta" type="number" step="0.01" className="w-full border border-gray-200 py-2.5 pl-8 pr-2 rounded-lg text-sm font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none" value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} required/>
                       </div>
-                      <div className="relative group/btn">
-                        <button type="button" className={`p-2.5 rounded-lg transition-colors overflow-hidden ${v.image || v.existingImageUrl ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`} title="Imagen específica para esta variante">
-                           <ImageIcon size={20} />
-                           <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => updateVariantImage(i, e.target.files[0])} />
+                      
+                      {/* Stock */}
+                      <div className="w-28 relative">
+                        <Archive size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <input placeholder="Stock" type="number" className="w-full border border-gray-200 py-2.5 pl-8 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <div className="relative">
+                          <button type="button" className={`p-2.5 rounded-lg transition-colors overflow-hidden ${v.image || v.existingImageUrl ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`} title="Imagen de variante">
+                             <ImageIcon size={18} />
+                             <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => updateVariantImage(i, e.target.files[0])} />
+                          </button>
+                        </div>
+                        <button type="button" onClick={() => removeVariant(i)} className="p-2.5 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                          <Trash2 size={18} />
                         </button>
                       </div>
-                      <button type="button" onClick={() => removeVariant(i)} className="p-2.5 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
-                        <Trash2 size={20} />
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -262,6 +299,7 @@ const Inventory = () => {
               <th className="p-4 px-6 w-12"></th>
               <th className="p-4">Producto</th>
               <th className="p-4">Stock Total</th>
+              <th className="p-4">Costo</th>
               <th className="p-4">Precio (Venta)</th>
               <th className="p-4 text-center">Acciones</th>
             </tr>
@@ -299,7 +337,10 @@ const Inventory = () => {
                         {totalStock} unid.
                       </span>
                     </td>
-                    <td className="p-4 font-bold text-gray-700">
+                    <td className="p-4 text-gray-500">
+                      {hasVariants ? 'Múltiples' : (p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '-')}
+                    </td>
+                    <td className="p-4 font-bold text-gray-800">
                       {hasVariants ? 'Múltiples' : `$${Number(p.price).toFixed(2)}`}
                     </td>
                     <td className="p-4">
@@ -316,7 +357,7 @@ const Inventory = () => {
                   {/* Expanded Variants Row */}
                   {isExpanded && hasVariants && (
                     <tr className="bg-gray-50/50">
-                      <td colSpan="5" className="p-0 border-t border-gray-100">
+                      <td colSpan="6" className="p-0 border-t border-gray-100">
                         <div className="py-4 pl-24 pr-6">
                           <table className="w-full text-sm">
                             <thead className="text-gray-400 text-xs uppercase font-bold border-b border-gray-200">
@@ -324,23 +365,34 @@ const Inventory = () => {
                                 <th className="pb-2 text-left">Imagen</th>
                                 <th className="pb-2 text-left">Variación</th>
                                 <th className="pb-2 text-left">Stock</th>
-                                <th className="pb-2 text-left">Precio</th>
+                                <th className="pb-2 text-left">Costo</th>
+                                <th className="pb-2 text-left">Precio Venta</th>
+                                <th className="pb-2 text-left">Margen Est.</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {p.variants.map(v => (
-                                <tr key={v.id} className="border-b border-gray-100/50 last:border-0">
-                                  <td className="py-3">
-                                    {v.imageUrl ? 
-                                      <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : v.imageUrl} className="w-8 h-8 rounded-md object-cover border border-gray-200" alt={v.name} />
-                                      : <span className="text-gray-400 text-xs italic">-</span>
-                                    }
-                                  </td>
-                                  <td className="py-3 font-semibold text-gray-700">{v.name}</td>
-                                  <td className="py-3 text-gray-600">{v.stock}</td>
-                                  <td className="py-3 font-bold text-green-600">${Number(v.price).toFixed(2)}</td>
-                                </tr>
-                              ))}
+                              {p.variants.map(v => {
+                                const cost = Number(v.costPrice) || 0;
+                                const sale = Number(v.price) || 0;
+                                const margin = sale - cost;
+                                return (
+                                  <tr key={v.id} className="border-b border-gray-100/50 last:border-0">
+                                    <td className="py-3">
+                                      {v.imageUrl ? 
+                                        <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : v.imageUrl} className="w-8 h-8 rounded-md object-cover border border-gray-200" alt={v.name} />
+                                        : <span className="text-gray-400 text-xs italic">-</span>
+                                      }
+                                    </td>
+                                    <td className="py-3 font-semibold text-gray-700">{v.name}</td>
+                                    <td className="py-3 text-gray-600">{v.stock} unid.</td>
+                                    <td className="py-3 text-gray-500">{v.costPrice ? `$${cost.toFixed(2)}` : '-'}</td>
+                                    <td className="py-3 font-bold text-gray-800">${sale.toFixed(2)}</td>
+                                    <td className="py-3 font-bold text-green-600">
+                                      ${margin.toFixed(2)}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>
