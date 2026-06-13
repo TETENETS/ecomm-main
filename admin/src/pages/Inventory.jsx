@@ -1,25 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronUp, DollarSign, Archive, Loader2 } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronRight, Archive, Loader2, Folder, X } from 'lucide-react';
 
-const api = axios.create({
-  baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
-});
-
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('adminToken');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import api from '../api';
 
 const Inventory = () => {
+  const [productLines, setProductLines] = useState([]);
   const [products, setProducts] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [expandedProduct, setExpandedProduct] = useState(null);
+  
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [showLineModal, setShowLineModal] = useState(false);
+  
+  const [expandedLines, setExpandedLines] = useState({});
+  const [expandedProducts, setExpandedProducts] = useState({});
+  
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [loading, setLoading] = useState(true);
   
-  // Form State
+  // Product Form State
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -27,42 +25,108 @@ const Inventory = () => {
   const [costPrice, setCostPrice] = useState('');
   const [stock, setStock] = useState('');
   const [image, setImage] = useState(null);
+  const [productLineId, setProductLineId] = useState('');
   const [variants, setVariants] = useState([]);
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  // Product Line Form State
+  const [lineName, setLineName] = useState('');
+  const [lineDescription, setLineDescription] = useState('');
+  const [lineImage, setLineImage] = useState(null);
+  const [editingLineId, setEditingLineId] = useState(null);
 
-  const fetchProducts = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      const res = await api.get('/products');
-      setProducts(res.data);
+      const [linesRes, prodsRes] = await Promise.all([
+        api.get('/product-lines'),
+        api.get('/products')
+      ]);
+      setProductLines(linesRes.data);
+      setProducts(prodsRes.data);
     } catch (error) {
-      console.error("Error fetching products", error);
+      console.error("Error fetching inventory data", error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // --- PRODUCT LINE LOGIC ---
+  const handleSaveLine = async (e) => {
+    e.preventDefault();
+    if (!editingLineId && !lineImage) {
+      alert('La imagen es obligatoria para las nuevas líneas de producto.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append('name', lineName);
+      formData.append('description', lineDescription);
+      if (lineImage) formData.append('image', lineImage);
+
+      if (editingLineId) {
+        await api.put(`/product-lines/${editingLineId}`, formData);
+      } else {
+        await api.post('/product-lines', formData);
+      }
+      
+      setShowLineModal(false);
+      setLineName('');
+      setLineDescription('');
+      setLineImage(null);
+      setEditingLineId(null);
+      fetchData();
+    } catch {
+      alert('Error guardando línea');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditLine = (line) => {
+    setEditingLineId(line.id);
+    setLineName(line.name);
+    setLineDescription(line.description || '');
+    setLineImage(null);
+    setShowLineModal(true);
+  };
+
+  const handleDeleteLine = async (id) => {
+    if (!window.confirm("¿Seguro que deseas eliminar esta Línea? Los productos se quedarán sin línea.")) return;
+    setDeletingId(`line-${id}`);
+    try {
+      await api.delete(`/product-lines/${id}`);
+      fetchData();
+    } catch {
+      alert("Error eliminando línea");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // --- PRODUCT LOGIC ---
   const addVariant = () => setVariants([...variants, { name: '', price: '', costPrice: '', stock: '', image: null }]);
-  
   const updateVariant = (index, field, value) => {
     const newVars = [...variants];
     newVars[index][field] = value;
     setVariants(newVars);
   };
-
   const updateVariantImage = (index, file) => {
     const newVars = [...variants];
     newVars[index].image = file;
     setVariants(newVars);
   };
-  
   const removeVariant = (index) => {
     const newVars = [...variants];
     newVars.splice(index, 1);
     setVariants(newVars);
   };
 
-  const handleEdit = (product) => {
+  const handleEditProduct = (product) => {
     setEditingId(product.id);
     setName(product.name);
     setDescription(product.description || '');
@@ -70,6 +134,7 @@ const Inventory = () => {
     setCostPrice(product.costPrice || '');
     setStock(product.stock || '');
     setImage(null);
+    setProductLineId(product.productLineId || '');
     
     const mappedVariants = product.variants ? product.variants.map(v => ({
       name: v.name,
@@ -81,26 +146,24 @@ const Inventory = () => {
     })) : [];
     
     setVariants(mappedVariants);
-    setShowForm(true);
+    setShowProductForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("¿Seguro que deseas eliminar este producto?")) {
-      setDeletingId(id);
-      try {
-        await api.delete(`/products/${id}`);
-        fetchProducts();
-      } catch (error) {
-        console.error("Error deleting product", error);
-        alert("Error al eliminar producto");
-      } finally {
-        setDeletingId(null);
-      }
+  const handleDeleteProduct = async (id) => {
+    if (!window.confirm("¿Seguro que deseas eliminar este producto?")) return;
+    setDeletingId(`prod-${id}`);
+    try {
+      await api.delete(`/products/${id}`);
+      fetchData();
+    } catch {
+      alert("Error al eliminar producto");
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmitProduct = async (e) => {
     e.preventDefault();
     setSaving(true);
     const formData = new FormData();
@@ -110,13 +173,12 @@ const Inventory = () => {
     if(costPrice) formData.append('costPrice', costPrice);
     if(stock) formData.append('stock', stock);
     if(image) formData.append('image', image);
+    if(productLineId) formData.append('productLineId', productLineId);
     
     if(variants.length > 0) {
       const variantsData = variants.map((v, i) => {
-        if (v.image) {
-          formData.append(`variantImage_${i}`, v.image);
-        }
-        return { name: v.name, price: v.price, costPrice: v.costPrice, stock: v.stock };
+        if (v.image) formData.append(`variantImage_${i}`, v.image);
+        return { name: v.name, price: v.price, costPrice: v.costPrice, stock: v.stock, existingImageUrl: v.existingImageUrl };
       });
       formData.append('variants', JSON.stringify(variantsData));
     } else {
@@ -129,11 +191,9 @@ const Inventory = () => {
       } else {
         await api.post('/products', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       }
-      
       resetForm();
-      fetchProducts();
-    } catch (error) {
-      console.error(error);
+      fetchData();
+    } catch {
       alert("Error al guardar producto");
     } finally {
       setSaving(false);
@@ -141,16 +201,15 @@ const Inventory = () => {
   };
 
   const resetForm = () => {
-    setShowForm(false);
+    setShowProductForm(false);
     setEditingId(null);
-    setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setVariants([]);
+    setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setVariants([]); setProductLineId('');
   };
 
-  const toggleExpand = (id) => {
-    setExpandedProduct(expandedProduct === id ? null : id);
-  };
+  // Toggles
+  const toggleLine = (id) => setExpandedLines(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleProduct = (id) => setExpandedProducts(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // Helper to compute margin
   const getMargin = (sale, cost) => {
     const s = Number(sale) || 0;
     const c = Number(cost) || 0;
@@ -158,34 +217,83 @@ const Inventory = () => {
     return s - c;
   };
 
+  // Group products by line for the UI
+  const groupedProducts = productLines.map(line => ({
+    ...line,
+    items: products.filter(p => p.productLineId === line.id)
+  }));
+  const unassignedProducts = products.filter(p => !p.productLineId);
+  if (unassignedProducts.length > 0) {
+    groupedProducts.push({ id: 'unassigned', name: 'Sin Línea Asignada', items: unassignedProducts });
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Inventario</h1>
-        <button 
-          onClick={() => { resetForm(); setShowForm(true); }} 
-          className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <Plus size={20} /> Nuevo Producto
-        </button>
+        <div className="flex gap-3">
+          <button onClick={() => { setEditingLineId(null); setLineName(''); setLineDescription(''); setLineImage(null); setShowLineModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
+            <Folder size={20} /> Nueva Línea
+          </button>
+          <button onClick={() => { resetForm(); setShowProductForm(true); }} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm">
+            <Plus size={20} /> Nuevo Producto
+          </button>
+        </div>
       </div>
 
-      {showForm && (
+      {/* --- MODAL LÍNEA DE PRODUCTO --- */}
+      {showLineModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowLineModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="font-bold text-lg text-gray-800">{editingLineId ? 'Editar Línea' : 'Nueva Línea de Producto'}</h3>
+              <button onClick={() => setShowLineModal(false)} className="p-2 hover:bg-gray-100 rounded-xl"><X size={18} className="text-gray-400" /></button>
+            </div>
+            <form onSubmit={handleSaveLine} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre *</label>
+                <input required value={lineName} onChange={e => setLineName(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                <textarea value={lineDescription} onChange={e => setLineDescription(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500" rows="3"></textarea>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Imagen {!editingLineId ? '*' : '(Opcional)'}</label>
+                <input type="file" accept="image/*" required={!editingLineId} onChange={e => setLineImage(e.target.files[0])} className="w-full" />
+              </div>
+              <div className="flex justify-end pt-2">
+                <button type="submit" disabled={saving} className="bg-blue-600 text-white font-bold px-7 py-2.5 rounded-xl flex items-center gap-2">{saving && <Loader2 size={15} className="animate-spin" />} Guardar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- FORMULARIO DE PRODUCTO --- */}
+      {showProductForm && (
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-xl font-black text-gray-800 mb-6 flex items-center gap-2">
             <Package className="text-blue-600" />
             {editingId ? 'Editar Producto' : 'Añadir Nuevo Producto'}
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmitProduct} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Nombre del Producto *</label>
-                  <input required type="text" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Camisa de lino" />
+                  <input required type="text" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={name} onChange={e => setName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Línea de Producto</label>
+                  <select value={productLineId} onChange={e => setProductLineId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl outline-none">
+                    <option value="">-- Sin Línea --</option>
+                    {productLines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Descripción</label>
-                  <textarea className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl h-32 focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none" value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalles del producto..."></textarea>
+                  <textarea className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl h-24 outline-none resize-none" value={description} onChange={e => setDescription(e.target.value)}></textarea>
                 </div>
               </div>
 
@@ -195,13 +303,11 @@ const Inventory = () => {
                   <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-blue-400 transition-all cursor-pointer relative overflow-hidden group h-32">
                     <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => setImage(e.target.files[0])} />
                     {image ? (
-                      <div className="text-blue-600 font-bold flex items-center gap-2">
-                        <ImageIcon size={24} /> {image.name}
-                      </div>
+                      <div className="text-blue-600 font-bold flex items-center gap-2"><ImageIcon size={24} /> {image.name}</div>
                     ) : (
                       <div className="flex flex-col items-center">
-                        <ImageIcon size={32} className="text-gray-400 mb-2 group-hover:text-blue-500 transition-colors" />
-                        <span className="text-sm font-medium">Haz clic o arrastra una imagen</span>
+                        <ImageIcon size={32} className="text-gray-400 mb-2 group-hover:text-blue-500" />
+                        <span className="text-sm font-medium">Arrastra una imagen o clic</span>
                       </div>
                     )}
                   </div>
@@ -210,86 +316,55 @@ const Inventory = () => {
                 {variants.length === 0 && (
                   <div className="grid grid-cols-3 gap-4 pt-2">
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Precio Compra</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-bold">$</span>
-                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-8 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="0.00" />
-                      </div>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">Costo</label>
+                      <input type="number" step="0.01" className="w-full bg-gray-50 border p-3 rounded-xl outline-none" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="0.00" />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Precio Venta *</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 text-sm font-bold">$</span>
-                        <input type="number" step="0.01" className="w-full bg-gray-50 border border-gray-200 p-3 pl-8 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={price} onChange={e => setPrice(e.target.value)} required={variants.length === 0} placeholder="0.00" />
-                      </div>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">Venta *</label>
+                      <input type="number" step="0.01" className="w-full bg-gray-50 border p-3 rounded-xl outline-none" value={price} onChange={e => setPrice(e.target.value)} required={variants.length === 0} placeholder="0.00" />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Stock General *</label>
-                      <div className="relative">
-                        <Archive size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input type="number" className="w-full bg-gray-50 border border-gray-200 p-3 pl-9 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={stock} onChange={e => setStock(e.target.value)} required={variants.length === 0} placeholder="0" />
-                      </div>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">Stock *</label>
+                      <input type="number" className="w-full bg-gray-50 border p-3 rounded-xl outline-none" value={stock} onChange={e => setStock(e.target.value)} required={variants.length === 0} placeholder="0" />
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
+            {/* VARIANTS */}
             <div className="bg-gray-50 border border-gray-200 p-6 rounded-2xl">
               <div className="flex justify-between items-center mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800">Variaciones (Tallas, Colores)</h3>
-                  <p className="text-sm text-gray-500">Agrega variaciones si este producto tiene múltiples opciones con diferentes precios o inventarios.</p>
+                  <h3 className="text-lg font-bold text-gray-800">Variaciones</h3>
+                  <p className="text-sm text-gray-500">Agrega tallas, colores, etc.</p>
                 </div>
-                <button type="button" onClick={addVariant} className="bg-white border border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-xl hover:bg-gray-100 transition-colors text-sm">
-                  + Añadir Variación
-                </button>
+                <button type="button" onClick={addVariant} className="bg-white border text-gray-700 font-bold px-4 py-2 rounded-xl text-sm">+ Añadir Variación</button>
               </div>
               
               {variants.length > 0 && (
                 <div className="space-y-3">
-                  {/* Column headers */}
-                  <div className="hidden md:flex px-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    <div className="flex-1 min-w-[150px]">Nombre Variante</div>
-                    <div className="w-28 text-center">Costo Unit.</div>
-                    <div className="w-28 text-center">Precio Venta</div>
-                    <div className="w-24 text-center">Stock</div>
-                    <div className="w-[88px]"></div>
-                  </div>
                   {variants.map((v, i) => (
                     <div key={i} className="flex flex-wrap md:flex-nowrap gap-3 items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex-1 min-w-[150px]">
-                        <input placeholder="Ej: Talla M - Rojo" className="w-full border-none bg-gray-50 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" value={v.name} onChange={e => updateVariant(i, 'name', e.target.value)} required/>
+                        <input placeholder="Ej: Talla M - Rojo" className="w-full bg-gray-50 p-2.5 rounded-lg text-sm outline-none" value={v.name} onChange={e => updateVariant(i, 'name', e.target.value)} required/>
                       </div>
-                      
-                      {/* Cost Price */}
-                      <div className="w-28 relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">$</span>
-                        <input placeholder="Costo" type="number" step="0.01" className="w-full border border-gray-200 py-2.5 pl-7 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.costPrice} onChange={e => updateVariant(i, 'costPrice', e.target.value)} />
+                      <div className="w-24">
+                        <input placeholder="Costo" type="number" step="0.01" className="w-full border py-2.5 px-2 rounded-lg text-sm outline-none" value={v.costPrice} onChange={e => updateVariant(i, 'costPrice', e.target.value)} />
                       </div>
-                      
-                      {/* Sale Price */}
-                      <div className="w-28 relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-500 text-xs font-bold">$</span>
-                        <input placeholder="Venta" type="number" step="0.01" className="w-full border border-blue-200 bg-blue-50/30 py-2.5 pl-7 pr-2 rounded-lg text-sm font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none" value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} required/>
+                      <div className="w-24">
+                        <input placeholder="Venta" type="number" step="0.01" className="w-full border border-blue-200 bg-blue-50/30 py-2.5 px-2 rounded-lg text-sm text-blue-700 font-bold outline-none" value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} required/>
                       </div>
-                      
-                      {/* Stock */}
-                      <div className="w-24 relative">
-                        <Archive size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input placeholder="Stock" type="number" className="w-full border border-gray-200 py-2.5 pl-7 pr-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
+                      <div className="w-20">
+                        <input placeholder="Stock" type="number" className="w-full border py-2.5 px-2 rounded-lg text-sm outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
                       </div>
-
                       <div className="flex items-center gap-1">
                         <div className="relative">
-                          <button type="button" className={`p-2 rounded-lg transition-colors overflow-hidden ${v.image || v.existingImageUrl ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`} title="Imagen de variante">
-                             <ImageIcon size={17} />
+                          <button type="button" className={`p-2 rounded-lg overflow-hidden ${v.image || v.existingImageUrl ? 'text-blue-600 bg-blue-50' : 'text-gray-400 bg-gray-50'}`}><ImageIcon size={17} />
                              <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => updateVariantImage(i, e.target.files[0])} />
                           </button>
                         </div>
-                        <button type="button" onClick={() => removeVariant(i)} className="p-2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
-                          <Trash2 size={17} />
-                        </button>
+                        <button type="button" onClick={() => removeVariant(i)} className="p-2 text-red-400 bg-red-50 hover:bg-red-100 rounded-lg"><Trash2 size={17} /></button>
                       </div>
                     </div>
                   ))}
@@ -298,148 +373,140 @@ const Inventory = () => {
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-              <button type="button" onClick={resetForm} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
-                Cancelar
-              </button>
-              <button type="submit" disabled={saving} className="bg-green-600 text-white font-bold px-8 py-2.5 rounded-xl hover:bg-green-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
-                {saving && <Loader2 size={18} className="animate-spin" />}
-                {saving ? 'Guardando...' : (editingId ? 'Actualizar Producto' : 'Guardar Producto')}
+              <button type="button" onClick={resetForm} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl">Cancelar</button>
+              <button type="submit" disabled={saving} className="bg-green-600 text-white font-bold px-8 py-2.5 rounded-xl flex items-center gap-2 shadow-sm">
+                {saving && <Loader2 size={18} className="animate-spin" />} {saving ? 'Guardando...' : 'Guardar Producto'}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50/80 text-gray-500 font-bold uppercase text-xs">
-            <tr>
-              <th className="p-4 px-6 w-12"></th>
-              <th className="p-4">Producto</th>
-              <th className="p-4">Stock Total</th>
-              <th className="p-4">Costo</th>
-              <th className="p-4">Precio Venta</th>
-              <th className="p-4">Ganancia Unit.</th>
-              <th className="p-4 text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {products.map(p => {
-              const totalStock = p.variants?.length > 0 
-                ? p.variants.reduce((acc, curr) => acc + curr.stock, 0)
-                : p.stock;
-              const hasVariants = p.variants?.length > 0;
-              const isExpanded = expandedProduct === p.id;
-              const margin = !hasVariants ? getMargin(p.price, p.costPrice) : null;
+      {/* --- INVENTORY TREE --- */}
+      {loading ? (
+        <div className="flex justify-center py-20"><Loader2 size={32} className="animate-spin text-blue-500" /></div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {groupedProducts.map(line => (
+            <div key={line.id} className="border-b border-gray-100 last:border-0">
+              {/* Nivel 1: Línea de Producto */}
+              <div className="bg-gray-50/80 p-4 flex items-center justify-between group hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => toggleLine(line.id)} className="p-1.5 rounded-lg bg-white shadow-sm text-gray-500 hover:text-blue-600 transition-colors">
+                    {expandedLines[line.id] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                  <Folder size={20} className="text-gray-400" />
+                  <span className="font-bold text-gray-800 text-base">{line.name}</span>
+                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-bold">{line.items.length} prod.</span>
+                </div>
+                {line.id !== 'unassigned' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => handleEditLine(line)} className="p-2 text-blue-400 hover:text-blue-600 bg-white shadow-sm hover:bg-blue-50 rounded-lg transition-all" title="Editar Línea">
+                      <Edit size={16} />
+                    </button>
+                    <button onClick={() => handleDeleteLine(line.id)} className="p-2 text-red-400 hover:text-red-600 bg-white shadow-sm hover:bg-red-50 rounded-lg transition-all" title="Eliminar Línea">
+                      {deletingId === `line-${line.id}` ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                    </button>
+                  </div>
+                )}
+              </div>
 
-              return (
-                <React.Fragment key={p.id}>
-                  <tr className="hover:bg-gray-50/50 transition-colors group">
-                    <td className="p-4 px-6 text-center">
-                      {hasVariants && (
-                        <button onClick={() => toggleExpand(p.id)} className="p-1 rounded bg-gray-100 text-gray-500 hover:bg-blue-100 hover:text-blue-600 transition-colors">
-                          {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-4 flex items-center gap-4">
-                      {p.imageUrl ? 
-                        <img src={import.meta.env.DEV ? `http://localhost:3001${p.imageUrl}` : p.imageUrl} className="w-12 h-12 rounded-xl object-cover bg-gray-100 border border-gray-200" alt={p.name} /> 
-                        : <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-300"><ImageIcon size={24}/></div>
-                      }
-                      <div>
-                        <span className="font-bold text-gray-800 text-base">{p.name}</span>
-                        {hasVariants && <p className="text-xs text-blue-600 font-semibold">{p.variants.length} Variaciones</p>}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${totalStock > 10 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {totalStock} unid.
-                      </span>
-                    </td>
-                    <td className="p-4 text-gray-500">
-                      {hasVariants ? <span className="text-xs italic">Ver variaciones</span> : (p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : <span className="text-gray-300">-</span>)}
-                    </td>
-                    <td className="p-4 font-bold text-gray-800">
-                      {hasVariants ? <span className="text-xs italic text-gray-500">Ver variaciones</span> : `$${Number(p.price || 0).toFixed(2)}`}
-                    </td>
-                    <td className="p-4">
-                      {hasVariants ? (
-                        <span className="text-xs italic text-gray-500">Ver variaciones</span>
-                      ) : margin !== null ? (
-                        <span className={`font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {margin >= 0 ? '+' : ''}${margin.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300">-</span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(p)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="Editar / Agregar Stock">
-                          <Edit size={18} />
-                        </button>
-                        <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50" title="Eliminar">
-                          {deletingId === p.id ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {/* Expanded Variants Row */}
-                  {isExpanded && hasVariants && (
-                    <tr className="bg-gray-50/50">
-                      <td colSpan="7" className="p-0 border-t border-gray-100">
-                        <div className="py-4 pl-24 pr-6">
-                          <table className="w-full text-sm">
-                            <thead className="text-gray-400 text-xs uppercase font-bold border-b border-gray-200">
-                              <tr>
-                                <th className="pb-2 text-left">Imagen</th>
-                                <th className="pb-2 text-left">Variación</th>
-                                <th className="pb-2 text-left">Stock</th>
-                                <th className="pb-2 text-left">Costo Unit.</th>
-                                <th className="pb-2 text-left">Precio Venta</th>
-                                <th className="pb-2 text-left">Ganancia Unit.</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {p.variants.map(v => {
-                                const vMargin = getMargin(v.price, v.costPrice);
-                                return (
-                                  <tr key={v.id} className="border-b border-gray-100/50 last:border-0">
-                                    <td className="py-3">
-                                      {v.imageUrl ? 
-                                        <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : v.imageUrl} className="w-8 h-8 rounded-md object-cover border border-gray-200" alt={v.name} />
-                                        : <span className="text-gray-300 text-xs">-</span>
-                                      }
-                                    </td>
-                                    <td className="py-3 font-semibold text-gray-700">{v.name}</td>
-                                    <td className="py-3 text-gray-600">{v.stock} unid.</td>
-                                    <td className="py-3 text-gray-500">{v.costPrice ? `$${Number(v.costPrice).toFixed(2)}` : <span className="text-gray-300">-</span>}</td>
-                                    <td className="py-3 font-bold text-gray-800">${Number(v.price).toFixed(2)}</td>
-                                    <td className="py-3">
-                                      {vMargin !== null ? (
-                                        <span className={`font-bold ${vMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                          {vMargin >= 0 ? '+' : ''}${vMargin.toFixed(2)}
-                                        </span>
-                                      ) : (
-                                        <span className="text-gray-300">-</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
+              {/* Nivel 2: Productos */}
+              {expandedLines[line.id] && (
+                <div className="bg-white divide-y divide-gray-50 overflow-x-auto">
+                  <div className="min-w-[800px] pb-2">
+                  {line.items.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-6 italic">Línea vacía</p>
+                  ) : line.items.map(p => {
+                    const totalStock = p.variants?.length > 0 ? p.variants.reduce((acc, curr) => acc + curr.stock, 0) : p.stock;
+                    const hasVariants = p.variants?.length > 0;
+                    const isExpandedProd = expandedProducts[p.id];
+                    const margin = !hasVariants ? getMargin(p.price, p.costPrice) : null;
+
+                    return (
+                      <div key={p.id}>
+                        <div className="p-3 pl-12 flex items-center justify-between hover:bg-blue-50/30 transition-colors group">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="w-8 flex justify-center">
+                              {hasVariants && (
+                                <button onClick={() => toggleProduct(p.id)} className="p-1 rounded text-gray-400 hover:bg-blue-100 hover:text-blue-600 transition-colors">
+                                  {isExpandedProd ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                </button>
+                              )}
+                            </div>
+                            {p.imageUrl ? 
+                              <img src={import.meta.env.DEV ? `http://localhost:3001${p.imageUrl}` : p.imageUrl} className="w-10 h-10 rounded-lg object-cover bg-gray-100 border border-gray-200" alt={p.name} /> 
+                              : <div className="w-10 h-10 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-300"><ImageIcon size={18}/></div>
+                            }
+                            <div className="flex-1">
+                              <span className="font-bold text-gray-700 block">{p.name}</span>
+                              {hasVariants && <span className="text-xs text-blue-500 font-semibold">{p.variants.length} variantes</span>}
+                            </div>
+                            <div className="w-24">
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${totalStock > 10 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {totalStock} stock
+                              </span>
+                            </div>
+                            <div className="w-24 text-gray-500 text-sm">{hasVariants ? '-' : (p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '-')}</div>
+                            <div className="w-24 font-bold text-gray-800 text-sm">{hasVariants ? '-' : `$${Number(p.price || 0).toFixed(2)}`}</div>
+                            <div className="w-24 text-sm font-semibold">
+                              {hasVariants ? '-' : margin !== null ? <span className={margin >= 0 ? 'text-green-600' : 'text-red-600'}>{margin >= 0 ? '+' : ''}${margin.toFixed(2)}</span> : '-'}
+                            </div>
+                            
+                            <div className="w-20 flex justify-end gap-1 transition-opacity">
+                              <button onClick={() => handleEditProduct(p)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md"><Edit size={16}/></button>
+                              <button onClick={() => handleDeleteProduct(p.id)} disabled={deletingId === `prod-${p.id}`} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md">
+                                {deletingId === `prod-${p.id}` ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16}/>}
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                        
+                        {/* Nivel 3: Variaciones */}
+                        {isExpandedProd && hasVariants && (
+                          <div className="bg-gray-50/50 pl-28 pr-6 py-3 border-t border-gray-50">
+                            <table className="w-full text-sm">
+                              <thead className="text-gray-400 text-xs uppercase font-bold border-b border-gray-200">
+                                <tr>
+                                  <th className="pb-2 text-left font-semibold">Variación</th>
+                                  <th className="pb-2 text-left font-semibold">Stock</th>
+                                  <th className="pb-2 text-left font-semibold">Costo Unit.</th>
+                                  <th className="pb-2 text-left font-semibold">Precio Venta</th>
+                                  <th className="pb-2 text-left font-semibold">Ganancia</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {p.variants.map(v => {
+                                  const vMargin = getMargin(v.price, v.costPrice);
+                                  return (
+                                    <tr key={v.id} className="border-b border-gray-100/50 last:border-0">
+                                      <td className="py-2.5 flex items-center gap-3">
+                                        {v.imageUrl && <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : v.imageUrl} className="w-7 h-7 rounded object-cover border" alt={v.name} />}
+                                        <span className="font-semibold text-gray-700">{v.name}</span>
+                                      </td>
+                                      <td className="py-2.5 text-gray-600 text-xs">{v.stock}</td>
+                                      <td className="py-2.5 text-gray-500 text-xs">{v.costPrice ? `$${Number(v.costPrice).toFixed(2)}` : '-'}</td>
+                                      <td className="py-2.5 font-bold text-gray-800 text-xs">${Number(v.price).toFixed(2)}</td>
+                                      <td className="py-2.5 text-xs font-bold">
+                                        {vMargin !== null ? <span className={vMargin >= 0 ? 'text-green-600' : 'text-red-600'}>{vMargin >= 0 ? '+' : ''}${vMargin.toFixed(2)}</span> : '-'}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

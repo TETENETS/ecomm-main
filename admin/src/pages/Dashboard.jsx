@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { 
   DollarSign, 
   ShoppingCart, 
@@ -14,20 +13,12 @@ import {
   FileText
 } from 'lucide-react';
 
-const api = axios.create({
-  baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
-});
-
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('adminToken');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import api from '../api';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState({ totalOrders: 0, totalEarnings: 0, totalExpenses: 0, totalProducts: 0 });
-  const [topProducts, setTopProducts] = useState([]);
+  const [salesByLine, setSalesByLine] = useState([]);
   const [pendingOrders, setPendingOrders] = useState([]);
   
   // Paginación para órdenes pendientes
@@ -44,7 +35,7 @@ const Dashboard = () => {
       const res = await api.get('/dashboard');
       if (res.data.metrics) {
         setMetrics(res.data.metrics);
-        setTopProducts(res.data.topProducts || []);
+        setSalesByLine(res.data.salesByLine || []);
         setPendingOrders(res.data.pendingOrders || []);
       } else {
         // Fallback for older backend
@@ -116,42 +107,57 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* PRODUCTOS MÁS VENDIDOS */}
+        {/* PRODUCTOS MÁS VENDIDOS POR LÍNEA */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 lg:col-span-2">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="text-lg font-bold text-gray-800">Top Productos (Más Vendidos)</h2>
+            <h2 className="text-lg font-bold text-gray-800">Ventas y Top Productos por Línea</h2>
             <button className="text-sm font-semibold text-blue-600 hover:text-blue-800">Ver todo</button>
           </div>
           <div className="p-0">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50/50 text-gray-500 font-semibold uppercase text-xs">
-                <tr>
-                  <th className="p-4 px-6">Producto</th>
-                  <th className="p-4">Ventas</th>
-                  <th className="p-4">Precio</th>
-                  <th className="p-4">Stock</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProducts.map((product, idx) => (
-                  <tr key={product.id} className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="p-4 px-6 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-400">
-                        {idx + 1}
-                      </div>
-                      <span className="font-bold text-gray-800">{product.name}</span>
-                    </td>
-                    <td className="p-4 font-semibold text-gray-600">{product.sales} unid.</td>
-                    <td className="p-4 font-semibold text-green-600">${Number(product.price || 0).toFixed(2)}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${product.stock > 10 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {product.stock} left
+            {salesByLine.length === 0 ? (
+              <p className="text-center text-gray-500 py-10">No hay ventas registradas aún.</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {salesByLine.map((line, idx) => (
+                  <div key={idx} className="p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-md font-bold text-gray-800 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                          <Package size={16} />
+                        </div>
+                        Línea: {line.name}
+                      </h3>
+                      <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                        {line.totalSales} Ventas Totales
                       </span>
-                    </td>
-                  </tr>
+                    </div>
+                    {line.products.length > 0 && (
+                      <table className="w-full text-left text-sm mt-2">
+                        <thead className="bg-gray-50/50 text-gray-500 font-semibold uppercase text-xs">
+                          <tr>
+                            <th className="p-3">Top Producto</th>
+                            <th className="p-3 text-center">Ventas</th>
+                            <th className="p-3 text-right">Precio</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {line.products.map((product, pIdx) => (
+                            <tr key={product.id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="p-3 flex items-center gap-3">
+                                <span className="font-bold text-gray-400">#{pIdx + 1}</span>
+                                <span className="font-semibold text-gray-700">{product.name}</span>
+                              </td>
+                              <td className="p-3 text-center font-bold text-gray-600">{product.sales} unid.</td>
+                              <td className="p-3 text-right font-semibold text-green-600">${Number(product.price || 0).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
         </div>
 

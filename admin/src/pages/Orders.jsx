@@ -1,23 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api';
 import {
   Package, Phone, MapPin, Eye, CheckCircle, XCircle, Clock,
   ChevronDown, ChevronUp, Loader2, Plus, Search, Filter,
-  ShoppingCart, User, CreditCard, MessageCircle, X
+  ShoppingCart, User, CreditCard, MessageCircle, X, Truck, RotateCcw, Link as LinkIcon
 } from 'lucide-react';
 
-const api = axios.create({ baseURL: import.meta.env.DEV ? 'http://localhost:3001/api' : '/api' });
-api.interceptors.request.use(cfg => {
-  const t = localStorage.getItem('adminToken');
-  if (t) cfg.headers.Authorization = `Bearer ${t}`;
-  return cfg;
-});
-
 const STATUS_CONFIG = {
-  PENDING:   { label: 'Pendiente',   bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200', icon: Clock },
-  COMPLETED: { label: 'Completado',  bg: 'bg-green-100',  text: 'text-green-700',  border: 'border-green-200',  icon: CheckCircle },
-  CANCELLED: { label: 'Cancelado',   bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-200',    icon: XCircle },
+  PENDING_DELIVERY: { label: 'Entrega pendiente', bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', icon: Truck },
+  PENDING_PAYMENT: { label: 'Por cobrar', bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200', icon: Clock },
+  COMPLETED: { label: 'Completado', bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+  CANCELLED: { label: 'Cancelado', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: XCircle },
+  REFUNDED: { label: 'Devolución', bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', icon: RotateCcw },
+  PENDING: { label: 'Pendiente', bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200', icon: Clock },
 };
 
 // ── Modal: detalle de pedido ──────────────────────────────────────
@@ -55,6 +51,17 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
             <span className={`px-3 py-1.5 rounded-full text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
               {cfg.label}
             </span>
+            <button 
+              onClick={() => {
+                const url = window.location.origin + '/orders?id=' + order.id;
+                navigator.clipboard.writeText(url);
+                alert('Enlace directo copiado al portapapeles');
+              }}
+              className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors font-bold flex items-center gap-2 text-sm"
+              title="Copiar enlace directo"
+            >
+              <LinkIcon size={16} /> <span className="hidden sm:block">Copiar Enlace</span>
+            </button>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
               <X size={20} className="text-gray-500" />
             </button>
@@ -277,8 +284,7 @@ const Orders = ({ openNewOrder }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchOrders();
-    api.get('/products').then(r => setProducts(r.data)).catch(() => {});
+    fetchData();
   }, [statusFilter]);
 
   // Auto-abrir modal si viene desde Dashboard
@@ -286,14 +292,27 @@ const Orders = ({ openNewOrder }) => {
     if (location.state?.newOrder || openNewOrder) setShowNewOrder(true);
   }, [location.state, openNewOrder]);
 
-  const fetchOrders = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/orders?status=${statusFilter}`);
-      setOrders(res.data);
+      const [oRes, pRes] = await Promise.all([api.get(`/orders?status=${statusFilter === 'ALL' ? '' : statusFilter}`), api.get('/products')]);
+      setOrders(oRes.data);
+      setProducts(pRes.data);
+
+      const params = new URLSearchParams(window.location.search);
+      const orderId = params.get('id');
+      if (orderId) {
+        const found = oRes.data.find(o => o.id === parseInt(orderId));
+        if (found) {
+           setSelectedOrder(found);
+           // Eliminar param para no re-abrir si el user cierra el modal
+           window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
+
 
   const handleStatusChange = async (id, status) => {
     await api.patch(`/orders/${id}/status`, { status });
@@ -308,9 +327,11 @@ const Orders = ({ openNewOrder }) => {
 
   const counts = {
     ALL: orders.length,
-    PENDING: orders.filter(o => o.status === 'PENDING').length,
+    PENDING_DELIVERY: orders.filter(o => o.status === 'PENDING_DELIVERY').length,
+    PENDING_PAYMENT: orders.filter(o => o.status === 'PENDING_PAYMENT').length,
     COMPLETED: orders.filter(o => o.status === 'COMPLETED').length,
     CANCELLED: orders.filter(o => o.status === 'CANCELLED').length,
+    REFUNDED: orders.filter(o => o.status === 'REFUNDED').length,
   };
 
   return (
@@ -325,13 +346,17 @@ const Orders = ({ openNewOrder }) => {
       </div>
 
       {/* Tabs de estado */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {[['ALL','Todos'],['PENDING','Pendientes'],['COMPLETED','Completados'],['CANCELLED','Cancelados']].map(([val, label]) => (
-          <button key={val} onClick={() => setStatusFilter(val)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${statusFilter === val ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>
-            {label}
-            <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${statusFilter === val ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'}`}>
-              {counts[val]}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {['ALL', 'PENDING_DELIVERY', 'PENDING_PAYMENT', 'COMPLETED', 'CANCELLED', 'REFUNDED'].map(s => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition-all
+              ${statusFilter === s ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'}`}
+          >
+            {s === 'ALL' ? 'Todos' : STATUS_CONFIG[s].label}
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${statusFilter === s ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500'}`}>
+              {counts[s]}
             </span>
           </button>
         ))}
@@ -404,7 +429,7 @@ const Orders = ({ openNewOrder }) => {
         <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} />
       )}
       {showNewOrder && (
-        <NewOrderModal onClose={() => setShowNewOrder(false)} onCreated={fetchOrders} products={products} />
+        <NewOrderModal onClose={() => setShowNewOrder(false)} onCreated={fetchData} products={products} />
       )}
     </div>
   );
