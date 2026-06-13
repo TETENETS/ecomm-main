@@ -21,7 +21,10 @@ const prisma = new PrismaClient();
 
 
 
-app.use(cors());
+const allowedOrigins = process.env.CORS_ORIGIN || '*';
+app.use(cors({
+  origin: allowedOrigins.includes(',') ? allowedOrigins.split(',') : allowedOrigins
+}));
 // Aumentar el límite para soportar imágenes en Base64
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

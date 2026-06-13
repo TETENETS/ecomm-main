@@ -1,4 +1,5 @@
-export { API_URL, BACKEND_URL, getImageUrl } from './api.js';
+import { API_URL, BACKEND_URL, getImageUrl } from './api.js';
+export { API_URL, BACKEND_URL, getImageUrl };
 window.tasaBCV = 1;
 
 export async function fetchBCV() {
