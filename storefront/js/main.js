@@ -196,7 +196,7 @@ window.addToCart = function(productId) {
 
     let variantId = null;
     let variantName = 'Default';
-    let finalPrice = prod.price;
+    let finalPrice = parseFloat(prod.price) || 0;
 
     if (prod.variants && prod.variants.length > 0) {
         const select = document.getElementById(`var-${prod.id}`);

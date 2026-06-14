@@ -406,12 +406,14 @@ app.delete('/api/finance-categories/:id', authMiddleware, async (req, res) => {
         where: { categoryId: catId },
         data: { categoryId: otroCat.id }
       });
+
+      await prisma.financeCategory.delete({ where: { id: catId } });
     }
 
-    await prisma.financeCategory.delete({ where: { id: catId } });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Error deleting finance category' });
+    console.error("Error deleting category:", error);
+    res.status(500).json({ error: 'Error deleting finance category: ' + error.message });
   }
 });
 
@@ -653,20 +655,21 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
     const orderItemsData = [];
 
     for (const item of items) {
-      const product = await prisma.product.findUnique({ 
+      const product = await prisma.product.findUnique({
         where: { id: item.productId },
-        include: { variants: true } 
+        include: { variants: true }
       });
       if (!product) continue;
       let price = product.price;
+      let variant = null;
       if (item.variantId) {
-        const variant = product.variants.find(v => v.id === item.variantId);
+        variant = product.variants.find(v => v.id === item.variantId);
         if (variant) price = variant.price;
       }
       totalAmount += parseFloat(price) * item.quantity;
-      
+
       // Stock deduction
-      const currentStock = item.variantId && variant ? variant.stock : product.stock;
+      const currentStock = variant ? variant.stock : product.stock;
       const newStock = Math.max(0, currentStock - item.quantity);
       
       if (item.variantId && variant) {

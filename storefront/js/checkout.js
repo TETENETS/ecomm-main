@@ -112,7 +112,8 @@ function renderCheckoutOrder() {
     
     let total = 0;
     cart.forEach(item => {
-        const itemTotal = item.price * item.quantity;
+        const itemPrice = Number(item.price) || 0;
+        const itemTotal = itemPrice * item.quantity;
         total += itemTotal;
         list.innerHTML += `<li><span>${item.productName} x ${item.quantity}</span> <span style="text-align: right;">$${itemTotal.toFixed(2)}<br><small>Bs. ${(itemTotal * window.tasaBCV).toFixed(2)}</small></span></li>`;
     });

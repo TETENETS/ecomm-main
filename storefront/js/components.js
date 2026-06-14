@@ -24,7 +24,7 @@ export function saveCart(cart) {
 export function updateCartUI() {
     const cart = getCart();
     const count = cart.reduce((acc, item) => acc + item.quantity, 0);
-    const amount = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const amount = cart.reduce((acc, item) => acc + ((Number(item.price) || 0) * item.quantity), 0);
     
     const countEl = document.getElementById('essenceCartBtn');
     if (countEl) countEl.innerHTML = `<img src="img/core-img/bag.svg" alt=""> <span>${count}</span>`;
@@ -33,6 +33,7 @@ export function updateCartUI() {
     if (cartListEl) {
         cartListEl.innerHTML = '';
         cart.forEach((item, index) => {
+            const itemPrice = Number(item.price) || 0;
             cartListEl.innerHTML += `
                 <div class="single-cart-item">
                     <a href="#" class="product-image">
@@ -41,7 +42,7 @@ export function updateCartUI() {
                             <span class="product-remove" onclick="window.removeFromCart(${index})"><i class="fa fa-close" aria-hidden="true"></i></span>
                             <h6>${item.productName}</h6>
                             <p class="size">Variante: ${item.variantName}</p>
-                            <p class="price">$${item.price.toFixed(2)} / Bs. ${(item.price * window.tasaBCV).toFixed(2)} x ${item.quantity}</p>
+                            <p class="price">$${itemPrice.toFixed(2)} / Bs. ${(itemPrice * window.tasaBCV).toFixed(2)} x ${item.quantity}</p>
                         </div>
                     </a>
                 </div>
