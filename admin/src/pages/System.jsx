@@ -19,6 +19,7 @@ const System = () => {
     template_payment_due: '<h1>Aviso de Vencimiento</h1>\\n<p>Hola {{customerName}}, te recordamos que el pago de <b>\${{amount}}</b> vence el {{dueDate}}.</p>',
     enable_template_payment_validated: 'false',
     template_payment_validated: '<h1>¡Pago Confirmado!</h1>\\n<p>Hola {{customerName}}, hemos validado el pago de tu orden <b>#{{orderId}}</b>.</p>',
+    manual_bcv_rate: '',
   });
   
   const [testEmail, setTestEmail] = useState('');
@@ -142,6 +143,12 @@ const System = () => {
                 <input type="text" value={settings.alert_emails || ''} onChange={e => setSettings({...settings, alert_emails: e.target.value})} placeholder="admin@tienda.com, ventas@tienda.com" className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
               </div>
 
+              <div className="mt-6 border-t border-gray-100 pt-4">
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tasa BCV Manual (Emergencia)</label>
+                <p className="text-xs text-gray-400 mb-2">Ingresa un valor para forzar la tasa de cambio en toda la tienda. Deja en blanco o "0" para usar las APIs automáticas de BCV.</p>
+                <input type="number" step="0.01" value={settings.manual_bcv_rate || ''} onChange={e => setSettings({...settings, manual_bcv_rate: e.target.value})} placeholder="Ej: 50.00" className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
+              </div>
+
               <div className="pt-4 flex justify-end">
                 <button type="submit" disabled={saving} className="bg-blue-600 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2">
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Guardar Credenciales
@@ -172,7 +179,6 @@ const System = () => {
           </div>
         </div>
         </div>
-        </div>
       )}
 
       {systemTab === 'TEMPLATES' && (
@@ -186,7 +192,20 @@ const System = () => {
             </button>
           </div>
           <div className="p-6 space-y-8">
-            <p className="text-sm text-gray-600">Personaliza el diseño HTML de los correos que se envían automáticamente. Usa variables como <code>{`{{customerName}}`}</code>, <code>{`{{orderId}}`}</code>, <code>{`{{totalAmount}}`}</code>.</p>
+            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-sm text-blue-800">
+              <p className="font-bold mb-2">Variables disponibles (puedes copiarlas y pegarlas en cualquier plantilla):</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><code>{`{{customerName}}`}</code> - Nombre del cliente</li>
+                <li><code>{`{{customerPhone}}`}</code> - Teléfono del cliente</li>
+                <li><code>{`{{locationAddress}}`}</code> - Dirección de envío</li>
+                <li><code>{`{{orderId}}`}</code> - Número de orden</li>
+                <li><code>{`{{totalAmount}}`}</code> - Total de la orden ($)</li>
+                <li><code>{`{{itemsList}}`}</code> - Lista de productos y variantes comprados (en formato HTML)</li>
+                <li><code>{`{{amount}}`}</code> - Monto a pagar (solo para Aviso de Vencimiento)</li>
+                <li><code>{`{{dueDate}}`}</code> - Fecha de vencimiento (solo para Aviso de Vencimiento)</li>
+              </ul>
+              <p className="mt-2 text-xs opacity-80">El sistema reemplazará automáticamente estas variables por los datos reales al enviar el correo.</p>
+            </div>
 
             {/* Template: Nueva Orden */}
             <div className="border border-gray-200 rounded-xl p-4">

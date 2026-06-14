@@ -1,14 +1,18 @@
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios'); // Asegurarnos de usar axios en caso de que node sea viejo
+const axios = require('axios');
+const { PrismaClient } = require('@prisma/client');
+const { sendAlert } = require('./n8n');
+const { sendEmail } = require('./mailer');
 
+const prisma = new PrismaClient();
 const ARCHIVO_JSON = path.join(__dirname, 'bcv.json');
 const INTERVALO_MS = 60 * 60 * 1000; // 60 minutos
 
 const FUENTES = [
     {
-        nombre: 'pydolarve',
-        url: 'https://pydolarve.org/api/v2/dollar?page=bcv',
+        nombre: 'pydolarve_bcv',
+        url: 'https://pydolarve.org/api/v1/dollar?page=bcv',
         extraer: (json) => {
             const precio = json?.monitors?.usd?.price;
             if (!precio || isNaN(precio)) throw new Error('Campo price no encontrado');
@@ -33,6 +37,15 @@ const FUENTES = [
             return parseFloat(precio);
         },
     },
+    {
+        nombre: 'pydolarve_enparalelovzla',
+        url: 'https://pydolarve.org/api/v1/dollar?page=enparalelovzla',
+        extraer: (json) => {
+            const bcv = json?.monitors?.bcv?.price;
+            if (!bcv || isNaN(bcv)) throw new Error('Campo price no encontrado en bcv');
+            return parseFloat(bcv);
+        },
+    }
 ];
 
 let tasaActual = {
@@ -95,7 +108,29 @@ async function actualizar() {
         console.log(`[BCV] ✅ Tasa actualizada: ${resultado.valor} Bs/$ (${resultado.fuente})`);
         return true;
     }
-    console.error('[BCV] ❌ Todas las fuentes fallaron. Se mantiene la última tasa conocida.');
+    
+    console.error('[BCV] ❌ Todas las fuentes fallaron. Se enviarán alertas.');
+    try {
+        // Enviar Alerta N8N
+        await sendAlert('BCV_API_FAILED', 'ALERTA CRITICA: Todas las fuentes de consulta de tasa BCV han fallado.', { lastKnownRate: tasaActual.valor, lastUpdate: tasaActual.actualizado });
+        
+        // Enviar Alerta Email
+        const setting = await prisma.setting.findUnique({ where: { key: 'alert_emails' } });
+        if (setting && setting.value) {
+            const emails = setting.value.split(',').map(e => e.trim()).filter(e => e);
+            for (const email of emails) {
+                await sendEmail(email, 'ALERTA CRÍTICA: Fallo en Consulta de BCV', `
+                    <h1>Error de Sincronización de Tasa</h1>
+                    <p>El sistema no pudo conectarse a ninguna de las APIs de tasa de cambio.</p>
+                    <p>La última tasa conocida es: <b>${tasaActual.valor} Bs/$</b> (${tasaActual.actualizado}).</p>
+                    <p>Por favor, ingrese al Panel de Administración y configure una <b>Tasa BCV Manual</b> si es necesario.</p>
+                `);
+            }
+        }
+    } catch (alertErr) {
+        console.error('[BCV] Error enviando alertas de falla:', alertErr.message);
+    }
+
     return false;
 }
 

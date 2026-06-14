@@ -30,7 +30,7 @@ const initCronJobs = () => {
       // 2. Order Due Dates
       const orderDueDates = await prisma.orderDueDate.findMany({
         where: { dueDate: { gte: targetDate, lt: targetEndDate }, order: { status: 'PENDING_PAYMENT' } },
-        include: { order: true }
+        include: { order: { include: { items: { include: { product: true, variant: true } } } } }
       });
 
       if (orderDueDates.length > 0) {
@@ -44,8 +44,18 @@ const initCronJobs = () => {
           await sendAlert('ORDER_DUE_SOON', `Aviso: En 3 días vence el pago de la orden #${order.id} de ${order.customerName}`, { orderId: order.id, customerName: order.customerName, amount: order.totalAmount, dueDate: odd.dueDate });
           
           if (order.customerEmail && settingsMap.enable_template_payment_due === 'true' && settingsMap.template_payment_due) {
+            const itemsListHtml = '<ul>' + order.items.map(i => {
+              const vName = i.variant ? ` (${i.variant.name})` : '';
+              return `<li>${i.quantity}x ${i.product.name}${vName} - $${Number(i.price).toFixed(2)}</li>`;
+            }).join('') + '</ul>';
+
             const emailHtml = settingsMap.template_payment_due
               .replace(/\{\{customerName\}\}/g, order.customerName)
+              .replace(/\{\{customerPhone\}\}/g, order.customerPhone || '')
+              .replace(/\{\{locationAddress\}\}/g, order.locationAddress || 'N/A')
+              .replace(/\{\{orderId\}\}/g, order.id)
+              .replace(/\{\{totalAmount\}\}/g, Number(order.totalAmount).toFixed(2))
+              .replace(/\{\{itemsList\}\}/g, itemsListHtml)
               .replace(/\{\{amount\}\}/g, Number(order.totalAmount).toFixed(2))
               .replace(/\{\{dueDate\}\}/g, new Date(odd.dueDate).toLocaleDateString());
             await sendEmail(order.customerEmail, `Recordatorio de Pago - Orden #${order.id}`, emailHtml);
@@ -80,7 +90,7 @@ const initCronJobs = () => {
       // 2. Order Due Dates
       const orderDueDates = await prisma.orderDueDate.findMany({
         where: { dueDate: { gte: today, lt: tomorrow }, order: { status: 'PENDING_PAYMENT' } },
-        include: { order: true }
+        include: { order: { include: { items: { include: { product: true, variant: true } } } } }
       });
 
       if (orderDueDates.length > 0) {
@@ -94,8 +104,18 @@ const initCronJobs = () => {
           await sendAlert('ORDER_DUE_TODAY', `Alerta: Hoy vence el pago de la orden #${order.id} de ${order.customerName}`, { orderId: order.id, customerName: order.customerName, amount: order.totalAmount, dueDate: odd.dueDate });
           
           if (order.customerEmail && settingsMap.enable_template_payment_due === 'true' && settingsMap.template_payment_due) {
+            const itemsListHtml = '<ul>' + order.items.map(i => {
+              const vName = i.variant ? ` (${i.variant.name})` : '';
+              return `<li>${i.quantity}x ${i.product.name}${vName} - $${Number(i.price).toFixed(2)}</li>`;
+            }).join('') + '</ul>';
+
             const emailHtml = settingsMap.template_payment_due
               .replace(/\{\{customerName\}\}/g, order.customerName)
+              .replace(/\{\{customerPhone\}\}/g, order.customerPhone || '')
+              .replace(/\{\{locationAddress\}\}/g, order.locationAddress || 'N/A')
+              .replace(/\{\{orderId\}\}/g, order.id)
+              .replace(/\{\{totalAmount\}\}/g, Number(order.totalAmount).toFixed(2))
+              .replace(/\{\{itemsList\}\}/g, itemsListHtml)
               .replace(/\{\{amount\}\}/g, Number(order.totalAmount).toFixed(2))
               .replace(/\{\{dueDate\}\}/g, new Date(odd.dueDate).toLocaleDateString());
             // Send the exact same reminder or maybe a slightly modified subject

@@ -31,7 +31,23 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- BCV ENDPOINT ---
-app.get('/api/bcv', (req, res) => {
+app.get('/api/bcv', async (req, res) => {
+  try {
+    const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+    if (manualBcv && manualBcv.value) {
+      const rate = parseFloat(manualBcv.value);
+      if (rate > 0) {
+        return res.json({
+          valor: rate,
+          fuente: 'MANUAL',
+          actualizado: new Date().toISOString()
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching manual BCV rate', error);
+  }
+  
   res.json(bcvService.obtenerInfo());
 });
 // --- SYSTEM LOGGING MIDDLEWARE ---
@@ -778,10 +794,18 @@ app.post('/api/checkout', async (req, res) => {
       if (customerEmail) {
         let emailHtml = '';
         if (settingsMap.enable_template_new_order === 'true' && settingsMap.template_new_order) {
+          const itemsListHtml = '<ul>' + order.items.map(i => {
+            const vName = i.variant ? ` (${i.variant.name})` : '';
+            return `<li>${i.quantity}x ${i.product.name}${vName} - $${Number(i.price).toFixed(2)}</li>`;
+          }).join('') + '</ul>';
+
           emailHtml = settingsMap.template_new_order
             .replace(/\{\{customerName\}\}/g, customerName)
+            .replace(/\{\{customerPhone\}\}/g, customerPhone || '')
+            .replace(/\{\{locationAddress\}\}/g, locationAddress || 'N/A')
             .replace(/\{\{orderId\}\}/g, order.id)
-            .replace(/\{\{totalAmount\}\}/g, Number(totalAmount).toFixed(2));
+            .replace(/\{\{totalAmount\}\}/g, Number(totalAmount).toFixed(2))
+            .replace(/\{\{itemsList\}\}/g, itemsListHtml);
         } else {
           emailHtml = `
             <h1>¡Gracias por tu pedido, ${customerName}!</h1>
@@ -853,9 +877,18 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
       allSettings.forEach(s => settingsMap[s.key] = s.value);
       
       if (settingsMap.enable_template_payment_validated === 'true' && settingsMap.template_payment_validated) {
+        const itemsListHtml = '<ul>' + order.items.map(i => {
+          const vName = i.variant ? ` (${i.variant.name})` : '';
+          return `<li>${i.quantity}x ${i.product.name}${vName} - $${Number(i.price).toFixed(2)}</li>`;
+        }).join('') + '</ul>';
+
         const emailHtml = settingsMap.template_payment_validated
           .replace(/\{\{customerName\}\}/g, order.customerName)
-          .replace(/\{\{orderId\}\}/g, order.id);
+          .replace(/\{\{customerPhone\}\}/g, order.customerPhone || '')
+          .replace(/\{\{locationAddress\}\}/g, order.locationAddress || 'N/A')
+          .replace(/\{\{orderId\}\}/g, order.id)
+          .replace(/\{\{totalAmount\}\}/g, Number(order.totalAmount).toFixed(2))
+          .replace(/\{\{itemsList\}\}/g, itemsListHtml);
         
         const { sendEmail } = require('./mailer');
         await sendEmail(order.customerEmail, `Pago Validado - Orden #${order.id}`, emailHtml);
