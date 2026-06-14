@@ -6,9 +6,11 @@ import api from '../api';
 const Inventory = () => {
   const [productLines, setProductLines] = useState([]);
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   
   const [showProductForm, setShowProductForm] = useState(false);
   const [showLineModal, setShowLineModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   
   const [expandedLines, setExpandedLines] = useState({});
   const [expandedProducts, setExpandedProducts] = useState({});
@@ -26,6 +28,7 @@ const Inventory = () => {
   const [stock, setStock] = useState('');
   const [image, setImage] = useState(null);
   const [productLineId, setProductLineId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [variants, setVariants] = useState([]);
 
   // Product Line Form State
@@ -34,15 +37,22 @@ const Inventory = () => {
   const [lineImage, setLineImage] = useState(null);
   const [editingLineId, setEditingLineId] = useState(null);
 
+  // Category Form State
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryDescription, setCategoryDescription] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [linesRes, prodsRes] = await Promise.all([
+      const [linesRes, prodsRes, catRes] = await Promise.all([
         api.get('/product-lines'),
-        api.get('/products')
+        api.get('/products'),
+        api.get('/categories')
       ]);
       setProductLines(linesRes.data);
       setProducts(prodsRes.data);
+      setCategories(catRes.data);
     } catch (error) {
       console.error("Error fetching inventory data", error);
     } finally {
@@ -108,6 +118,37 @@ const Inventory = () => {
     }
   };
 
+  // --- CATEGORY LOGIC ---
+  const handleSaveCategory = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (editingCategoryId) {
+        await api.put(`/categories/${editingCategoryId}`, { name: categoryName, description: categoryDescription });
+      } else {
+        await api.post('/categories', { name: categoryName, description: categoryDescription });
+      }
+      setCategoryName('');
+      setCategoryDescription('');
+      setEditingCategoryId(null);
+      fetchData();
+    } catch {
+      alert('Error guardando categoría');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm('¿Seguro que deseas eliminar esta categoría?')) return;
+    try {
+      await api.delete(`/categories/${id}`);
+      fetchData();
+    } catch {
+      alert('Error eliminando categoría');
+    }
+  };
+
   // --- PRODUCT LOGIC ---
   const addVariant = () => setVariants([...variants, { name: '', price: '', costPrice: '', stock: '', image: null }]);
   const updateVariant = (index, field, value) => {
@@ -135,6 +176,7 @@ const Inventory = () => {
     setStock(product.stock || '');
     setImage(null);
     setProductLineId(product.productLineId || '');
+    setCategoryId(product.categoryId || '');
     
     const mappedVariants = product.variants ? product.variants.map(v => ({
       name: v.name,
@@ -174,6 +216,7 @@ const Inventory = () => {
     if(stock) formData.append('stock', stock);
     if(image) formData.append('image', image);
     if(productLineId) formData.append('productLineId', productLineId);
+    if(categoryId) formData.append('categoryId', categoryId);
     
     if(variants.length > 0) {
       const variantsData = variants.map((v, i) => {
@@ -203,7 +246,7 @@ const Inventory = () => {
   const resetForm = () => {
     setShowProductForm(false);
     setEditingId(null);
-    setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setVariants([]); setProductLineId('');
+    setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setVariants([]); setProductLineId(''); setCategoryId('');
   };
 
   // Toggles
@@ -232,6 +275,9 @@ const Inventory = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Inventario</h1>
         <div className="flex gap-3">
+          <button onClick={() => { setCategoryName(''); setCategoryDescription(''); setEditingCategoryId(null); setShowCategoryModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
+            <Folder size={20} /> Categorías
+          </button>
           <button onClick={() => { setEditingLineId(null); setLineName(''); setLineDescription(''); setLineImage(null); setShowLineModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
             <Folder size={20} /> Nueva Línea
           </button>
@@ -260,12 +306,83 @@ const Inventory = () => {
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Imagen {!editingLineId ? '*' : '(Opcional)'}</label>
-                <input type="file" accept="image/*" required={!editingLineId} onChange={e => setLineImage(e.target.files[0])} className="w-full" />
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-blue-400 transition-all cursor-pointer relative overflow-hidden group h-32">
+                  <input type="file" accept="image/*" required={!editingLineId} onChange={e => setLineImage(e.target.files[0])} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                  {lineImage ? (
+                    <div className="text-blue-600 font-bold flex items-center gap-2"><ImageIcon size={24} /> {lineImage.name}</div>
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <ImageIcon size={32} className="text-gray-400 mb-2 group-hover:text-blue-500" />
+                      <span className="text-sm font-medium">Arrastra una imagen o clic</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex justify-end pt-2">
                 <button type="submit" disabled={saving} className="bg-blue-600 text-white font-bold px-7 py-2.5 rounded-xl flex items-center gap-2">{saving && <Loader2 size={15} className="animate-spin" />} Guardar</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL CATEGORÍA --- */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowCategoryModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
+              <h3 className="font-bold text-lg text-gray-800">Gestionar Categorías</h3>
+              <button onClick={() => setShowCategoryModal(false)} className="p-2 hover:bg-gray-100 rounded-xl"><X size={18} className="text-gray-400" /></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <form onSubmit={handleSaveCategory} className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                <h4 className="font-bold text-sm text-gray-700">{editingCategoryId ? 'Editar Categoría' : 'Añadir Nueva Categoría'}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre *</label>
+                    <input required value={categoryName} onChange={e => setCategoryName(e.target.value)} className="w-full bg-white border p-2.5 rounded-lg outline-none focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Descripción</label>
+                    <input value={categoryDescription} onChange={e => setCategoryDescription(e.target.value)} className="w-full bg-white border p-2.5 rounded-lg outline-none focus:border-blue-400" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  {editingCategoryId && (
+                    <button type="button" onClick={() => {setEditingCategoryId(null); setCategoryName(''); setCategoryDescription('');}} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-lg">Cancelar</button>
+                  )}
+                  <button type="submit" disabled={saving} className="bg-blue-600 text-white text-sm font-bold px-6 py-2 rounded-lg flex items-center gap-2">{saving && <Loader2 size={15} className="animate-spin" />} Guardar</button>
+                </div>
+              </form>
+
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
+                    <tr>
+                      <th className="p-3 text-left">Nombre</th>
+                      <th className="p-3 text-left">Descripción</th>
+                      <th className="p-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {categories.map(c => (
+                      <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="p-3 font-bold text-gray-800">{c.name}</td>
+                        <td className="p-3 text-gray-500 truncate max-w-[200px]">{c.description || '-'}</td>
+                        <td className="p-3 text-right space-x-2">
+                          <button onClick={() => { setEditingCategoryId(c.id); setCategoryName(c.name); setCategoryDescription(c.description || ''); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md"><Edit size={16}/></button>
+                          <button onClick={() => handleDeleteCategory(c.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md"><Trash2 size={16}/></button>
+                        </td>
+                      </tr>
+                    ))}
+                    {categories.length === 0 && (
+                      <tr><td colSpan="3" className="p-6 text-center text-gray-400 italic">No hay categorías</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -283,6 +400,13 @@ const Inventory = () => {
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Nombre del Producto *</label>
                   <input required type="text" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={name} onChange={e => setName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Categoría</label>
+                  <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl outline-none">
+                    <option value="">-- Sin Categoría --</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Línea de Producto</label>
@@ -411,10 +535,22 @@ const Inventory = () => {
                 )}
               </div>
 
-              {/* Nivel 2: Productos */}
               {expandedLines[line.id] && (
                 <div className="bg-white divide-y divide-gray-50 overflow-x-auto">
                   <div className="min-w-[800px] pb-2">
+                  <div className="flex p-3 pl-12 py-2 bg-gray-50/50 text-xs font-bold text-gray-400 uppercase">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-8 shrink-0"></div>
+                      <div className="w-10 shrink-0"></div>
+                      <div className="flex-1 min-w-[150px]">Producto</div>
+                      <div className="w-32 shrink-0">Categoría</div>
+                      <div className="w-24 shrink-0">Stock</div>
+                      <div className="w-24 shrink-0">Costo</div>
+                      <div className="w-24 shrink-0">Venta</div>
+                      <div className="w-24 shrink-0">Margen</div>
+                      <div className="w-20 shrink-0 text-right">Acciones</div>
+                    </div>
+                  </div>
                   {line.items.length === 0 ? (
                     <p className="text-gray-400 text-sm text-center py-6 italic">Línea vacía</p>
                   ) : line.items.map(p => {
@@ -427,7 +563,7 @@ const Inventory = () => {
                       <div key={p.id}>
                         <div className="p-3 pl-12 flex items-center justify-between hover:bg-blue-50/30 transition-colors group">
                           <div className="flex items-center gap-4 flex-1">
-                            <div className="w-8 flex justify-center">
+                            <div className="w-8 shrink-0 flex justify-center">
                               {hasVariants && (
                                 <button onClick={() => toggleProduct(p.id)} className="p-1 rounded text-gray-400 hover:bg-blue-100 hover:text-blue-600 transition-colors">
                                   {isExpandedProd ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -435,25 +571,28 @@ const Inventory = () => {
                               )}
                             </div>
                             {p.imageUrl ? 
-                              <img src={import.meta.env.DEV ? `http://localhost:3001${p.imageUrl}` : p.imageUrl} className="w-10 h-10 rounded-lg object-cover bg-gray-100 border border-gray-200" alt={p.name} /> 
-                              : <div className="w-10 h-10 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-300"><ImageIcon size={18}/></div>
+                              <img src={import.meta.env.DEV ? `http://localhost:3001${p.imageUrl}` : p.imageUrl} className="w-10 h-10 shrink-0 rounded-lg object-cover bg-gray-100 border border-gray-200" alt={p.name} /> 
+                              : <div className="w-10 h-10 shrink-0 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-300"><ImageIcon size={18}/></div>
                             }
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-[150px]">
                               <span className="font-bold text-gray-700 block">{p.name}</span>
                               {hasVariants && <span className="text-xs text-blue-500 font-semibold">{p.variants.length} variantes</span>}
                             </div>
-                            <div className="w-24">
+                            <div className="w-32 shrink-0 text-xs text-gray-500 flex items-center">
+                              {p.category?.name || <span className="italic">Sin Categoría</span>}
+                            </div>
+                            <div className="w-24 shrink-0">
                               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${totalStock > 10 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                 {totalStock} stock
                               </span>
                             </div>
-                            <div className="w-24 text-gray-500 text-sm">{hasVariants ? '-' : (p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '-')}</div>
-                            <div className="w-24 font-bold text-gray-800 text-sm">{hasVariants ? '-' : `$${Number(p.price || 0).toFixed(2)}`}</div>
-                            <div className="w-24 text-sm font-semibold">
+                            <div className="w-24 shrink-0 text-gray-500 text-sm">{hasVariants ? '-' : (p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '-')}</div>
+                            <div className="w-24 shrink-0 font-bold text-gray-800 text-sm">{hasVariants ? '-' : `$${Number(p.price || 0).toFixed(2)}`}</div>
+                            <div className="w-24 shrink-0 text-sm font-semibold">
                               {hasVariants ? '-' : margin !== null ? <span className={margin >= 0 ? 'text-green-600' : 'text-red-600'}>{margin >= 0 ? '+' : ''}${margin.toFixed(2)}</span> : '-'}
                             </div>
                             
-                            <div className="w-20 flex justify-end gap-1 transition-opacity">
+                            <div className="w-20 shrink-0 flex justify-end gap-1 transition-opacity">
                               <button onClick={() => handleEditProduct(p)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md"><Edit size={16}/></button>
                               <button onClick={() => handleDeleteProduct(p.id)} disabled={deletingId === `prod-${p.id}`} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md">
                                 {deletingId === `prod-${p.id}` ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16}/>}

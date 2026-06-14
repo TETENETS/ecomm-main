@@ -2,7 +2,10 @@ import { API_URL, fetchBCV, renderHeader, renderCartArea, renderFooter, updateCa
 
 let products = [];
 let productLines = [];
+let categories = [];
 let currentLineId = null;
+let searchQuery = '';
+let filterCategoryId = '';
 let slideIntervals = [];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -52,18 +55,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadData() {
     try {
-        const [linesRes, prodsRes] = await Promise.all([
+        const [linesRes, prodsRes, catsRes] = await Promise.all([
             fetch(`${API_URL}/public/product-lines`),
-            fetch(`${API_URL}/public/products`)
+            fetch(`${API_URL}/public/products`),
+            fetch(`${API_URL}/public/categories`)
         ]);
         productLines = await linesRes.json();
         products = await prodsRes.json();
+        categories = await catsRes.json();
+
+        // Sort products by category A-Z initially
+        products.sort((a, b) => {
+            const catA = a.category ? a.category.name.toLowerCase() : 'zzz';
+            const catB = b.category ? b.category.name.toLowerCase() : 'zzz';
+            return catA.localeCompare(catB);
+        });
+
         renderProductLines();
         renderProducts();
     } catch (err) {
         console.error('Error loading data:', err);
     }
 }
+
+window.updateFilters = function() {
+    searchQuery = document.getElementById('storeSearch').value.toLowerCase();
+    filterCategoryId = document.getElementById('storeCategory').value;
+    renderProducts();
+};
 
 function renderProductLines() {
     const container = document.getElementById('product-lines-container');
@@ -120,32 +139,62 @@ function renderProductLines() {
     });
 }
 
+let lastRenderedLineId = undefined;
+
 function renderProducts() {
     const container = document.getElementById('product-list-container');
     const headerContainer = document.getElementById('catalog-header-container');
     if (!container || !headerContainer) return;
 
-    let filteredProducts = products;
-    if (currentLineId) {
-        filteredProducts = products.filter(p => p.productLineId === currentLineId);
-        const line = productLines.find(l => l.id === currentLineId);
-        
-        let bannerBg = line && line.imageUrl ? getImageUrl(line.imageUrl) : 'img/bg-img/bg-2.jpg';
-        
-        headerContainer.innerHTML = `
-            <div style="width: 100%; height: 300px; background-image: url(${bannerBg}); background-size: cover; background-position: center; border-radius: 15px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.3);">
-                <div style="padding: 20px 40px; border-radius: 10px;">
-                    <h2 style="color: white; margin: 0; font-size: 3rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">${line ? line.name : 'Línea de Producto'}</h2>
+    if (lastRenderedLineId !== currentLineId) {
+        let filtersHtml = `
+            <div class="row mb-4 mt-4 justify-content-center" style="max-width: 800px; margin: 0 auto;">
+                <div class="col-12 d-flex gap-2" style="gap: 10px;">
+                    <input type="text" id="storeSearch" class="form-control" placeholder="Buscar productos..." value="${searchQuery}" onkeyup="window.updateFilters()">
+                    <select id="storeCategory" class="form-control" onchange="window.updateFilters()">
+                        <option value="">Todas las Categorías</option>
+                        ${categories.map(c => `<option value="${c.id}" ${filterCategoryId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                    </select>
                 </div>
             </div>
-            <button class="btn essence-btn mb-4" onclick="window.showAllProducts()">← Volver al Catálogo Completo</button>
         `;
-    } else {
-        headerContainer.innerHTML = `<h2>Catálogo de Productos</h2>`;
+
+        if (currentLineId) {
+            const line = productLines.find(l => l.id === currentLineId);
+            let bannerBg = line && line.imageUrl ? getImageUrl(line.imageUrl) : 'img/bg-img/bg-2.jpg';
+            
+            headerContainer.innerHTML = `
+                <div style="width: 100%; height: 300px; background-image: url(${bannerBg}); background-size: cover; background-position: center; border-radius: 15px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.3);">
+                    <div style="padding: 20px 40px; border-radius: 10px;">
+                        <h2 style="color: white; margin: 0; font-size: 3rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">${line ? line.name : 'Línea de Producto'}</h2>
+                    </div>
+                </div>
+                <button class="btn essence-btn mb-4" onclick="window.showAllProducts()">← Volver al Catálogo Completo</button>
+                ${filtersHtml}
+            `;
+        } else {
+            headerContainer.innerHTML = `<h2>Catálogo de Productos</h2> ${filtersHtml}`;
+        }
+        lastRenderedLineId = currentLineId;
+    }
+
+    let filteredProducts = products;
+    if (currentLineId) {
+        filteredProducts = filteredProducts.filter(p => p.productLineId === currentLineId);
+    }
+    if (searchQuery) {
+        filteredProducts = filteredProducts.filter(p => p.name.toLowerCase().includes(searchQuery));
+    }
+    if (filterCategoryId) {
+        filteredProducts = filteredProducts.filter(p => p.categoryId == filterCategoryId);
     }
 
     container.innerHTML = '';
     
+    if (filteredProducts.length === 0) {
+        container.innerHTML = '<div class="col-12 text-center py-5"><p class="text-muted">No se encontraron productos con estos filtros.</p></div>';
+    }
+
     filteredProducts.forEach(p => {
         let mainImg = p.imageUrl ? getImageUrl(p.imageUrl) : 'img/product-img/product-1.jpg';
         let priceUsd = p.price ? Number(p.price) : 0;
@@ -198,6 +247,8 @@ window.addToCart = function(productId) {
     let variantName = 'Default';
     let finalPrice = parseFloat(prod.price) || 0;
 
+    let maxStock = prod.stock || 0;
+
     if (prod.variants && prod.variants.length > 0) {
         const select = document.getElementById(`var-${prod.id}`);
         if (!select.value) {
@@ -208,6 +259,9 @@ window.addToCart = function(productId) {
         const opt = select.options[select.selectedIndex];
         variantName = opt.text.split(' - ')[0];
         finalPrice = parseFloat(opt.getAttribute('data-price'));
+        
+        const variantObj = prod.variants.find(v => v.id === variantId);
+        maxStock = variantObj ? variantObj.stock : 0;
     }
 
     const qtyInput = document.getElementById(`qty-${prod.id}`);
@@ -217,6 +271,13 @@ window.addToCart = function(productId) {
     
     // Check if item already exists in cart with same variant
     const existingIndex = cart.findIndex(i => i.productId === prod.id && i.variantId === variantId);
+    const existingQuantity = existingIndex > -1 ? cart[existingIndex].quantity : 0;
+
+    if (existingQuantity + quantity > maxStock) {
+        alert(`¡Stock insuficiente! Sólo quedan ${maxStock} unidades disponibles de este producto/variante.`);
+        return;
+    }
+    
     if (existingIndex > -1) {
         cart[existingIndex].quantity += quantity;
     } else {

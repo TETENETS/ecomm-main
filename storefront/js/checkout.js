@@ -22,8 +22,21 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <input type="text" class="form-control" id="customerName" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label for="customerPhone">Teléfono <span>*</span></label>
-                                        <input type="text" class="form-control" id="customerPhone" required>
+                                        <label>Teléfono <span>*</span></label>
+                                        <div class="d-flex">
+                                            <select class="form-control" id="phoneCountry" style="width: 80px; padding: 0 10px; border-right: none; border-radius: 0;">
+                                                <option value="+58">+58</option>
+                                            </select>
+                                            <select class="form-control" id="phoneArea" style="width: 100px; padding: 0 10px; border-radius: 0;">
+                                                <option value="414">414</option>
+                                                <option value="424">424</option>
+                                                <option value="412">412</option>
+                                                <option value="416">416</option>
+                                                <option value="426">426</option>
+                                                <option value="422">422</option>
+                                            </select>
+                                            <input type="text" class="form-control" id="phoneNum" placeholder="1234567" required minlength="7" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="border-left: none; border-radius: 0;">
+                                        </div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="customerEmail">Correo Electrónico</label>
@@ -135,8 +148,8 @@ function initMapLogic() {
 
     let map;
     let mapaBloqueado = false;
-    const latInicial = 10.120270;
-    const lngInicial = -64.647798;
+    let latInicial = 10.120270;
+    let lngInicial = -64.647798;
 
     setTimeout(() => {
         map = L.map('mapa').setView([latInicial, lngInicial], 17);
@@ -155,6 +168,21 @@ function initMapLogic() {
 
         latInput.value = latInicial.toFixed(6);
         lngInput.value = lngInicial.toFixed(6);
+
+        // Try to get user's location
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                latInicial = position.coords.latitude;
+                lngInicial = position.coords.longitude;
+                map.setView([latInicial, lngInicial], 17);
+                if (!mapaBloqueado) {
+                    latInput.value = latInicial.toFixed(6);
+                    lngInput.value = lngInicial.toFixed(6);
+                }
+            }, (error) => {
+                console.warn("Geolocation denied or error:", error);
+            });
+        }
     }, 500);
 
     btnBloquear.addEventListener('click', () => {
@@ -181,6 +209,13 @@ function initMapLogic() {
         e.preventDefault();
         
         if(!form.checkValidity()) return form.reportValidity();
+
+        const emailInput = document.getElementById('customerEmail').value;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailInput || !emailRegex.test(emailInput)) {
+            return alert("Por favor, ingresa un correo electrónico válido.");
+        }
+
         if(!mapaBloqueado) return alert("Por favor, fija tu ubicación en el mapa antes de continuar.");
         
         const cart = getCart();
@@ -192,7 +227,7 @@ function initMapLogic() {
         try {
             const payload = {
                 customerName: document.getElementById('customerName').value,
-                customerPhone: document.getElementById('customerPhone').value,
+                customerPhone: `${document.getElementById('phoneCountry').value}${document.getElementById('phoneArea').value}${document.getElementById('phoneNum').value.replace(/\D/g, '')}`,
                 customerEmail: document.getElementById('customerEmail').value,
                 locationAddress: document.getElementById('locationAddress').value,
                 locationMapLat: parseFloat(latInput.value),

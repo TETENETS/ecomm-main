@@ -5,6 +5,7 @@ import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
 import Finances from './pages/Finances';
 import Logs from './pages/Logs';
+import System from './pages/System';
 import { 
   LayoutDashboard, 
   Package, 
@@ -13,7 +14,8 @@ import {
   LogOut, 
   Activity,
   Menu,
-  X
+  X,
+  Server
 } from 'lucide-react';
 
 import api from './api';
@@ -81,7 +83,7 @@ const Sidebar = ({ onLogout, isOpen, setIsOpen }) => {
     { name: 'Inventario', path: '/products', icon: <Package size={20} /> },
     { name: 'Órdenes', path: '/orders', icon: <ShoppingCart size={20} /> },
     { name: 'Finanzas', path: '/finances', icon: <DollarSign size={20} /> },
-    { name: 'Sistema', path: '/logs', icon: <Activity size={20} /> },
+    { name: 'Sistema', path: '/system', icon: <Server size={20} /> },
   ];
 
   return (
@@ -202,6 +204,7 @@ function App() {
                   <Route path="/orders" element={<Orders />} />
                   <Route path="/finances" element={<Finances />} />
                   <Route path="/logs" element={<Logs />} />
+                  <Route path="/system" element={<System />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </div>

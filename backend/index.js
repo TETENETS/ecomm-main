@@ -9,6 +9,7 @@ const fs = require('fs');
 const { sendAlert } = require('./n8n');
 const { initCronJobs } = require('./cron');
 const bcvService = require('./bcvService');
+const { sendEmail } = require('./mailer');
 
 dotenv.config();
 
@@ -119,6 +120,34 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// --- SETTINGS ROUTES ---
+app.get('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const settings = await prisma.setting.findMany();
+    const result = {};
+    settings.forEach(s => result[s.key] = s.value);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching settings' });
+  }
+});
+
+app.put('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const updates = req.body;
+    for (const [key, value] of Object.entries(updates)) {
+      await prisma.setting.upsert({
+        where: { key },
+        update: { value: String(value) },
+        create: { key, value: String(value) }
+      });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error updating settings' });
+  }
+});
 
 // --- TEST ALERTS ---
 app.post('/api/test-alert', authMiddleware, async (req, res) => {
@@ -132,6 +161,18 @@ app.post('/api/test-alert', authMiddleware, async (req, res) => {
     if (type === 'ACCOUNT_DUE_TODAY') message = `Alerta: Hoy es la fecha límite de la cuenta por cobrar: ${payload.title}`;
     
     await sendAlert(type, message, payload);
+
+    if (type === 'TEST_EMAIL') {
+      const { email } = payload;
+      if (email) {
+        const emailSent = await sendEmail(email, 'Prueba de Conexión SMTP', '<h1>¡Éxito!</h1><p>Las credenciales de correo configuradas están funcionando correctamente.</p>');
+        if (!emailSent) {
+          return res.status(500).json({ error: 'Error enviando correo de prueba. Verifica las credenciales SMTP en los registros del servidor.' });
+        }
+        return res.json({ success: true, message: 'Alerta a n8n y correo de prueba enviados.' });
+      }
+    }
+
     res.json({ success: true, message: 'Alerta enviada a n8n' });
   } catch (error) {
     console.error(error);
@@ -163,11 +204,68 @@ app.get('/api/public/product-lines', async (req, res) => {
 app.get('/api/public/products', async (req, res) => {
   try {
     const products = await prisma.product.findMany({
-      include: { variants: true }
+      where: {
+        OR: [
+          { stock: { gt: 0 } },
+          { variants: { some: { stock: { gt: 0 } } } }
+        ]
+      },
+      include: { variants: true, category: true, productLine: true }
     });
     res.json(products);
   } catch (error) {
     res.status(500).json({ error: 'Error fetching products' });
+  }
+});
+
+// --- CATEGORIES ---
+app.get('/api/public/categories', async (req, res) => {
+  try {
+    const cats = await prisma.category.findMany();
+    res.json(cats);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching categories' });
+  }
+});
+
+app.get('/api/categories', authMiddleware, async (req, res) => {
+  try {
+    const cats = await prisma.category.findMany({ include: { products: true } });
+    res.json(cats);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching categories' });
+  }
+});
+
+app.post('/api/categories', authMiddleware, async (req, res) => {
+  try {
+    const cat = await prisma.category.create({ 
+      data: { name: req.body.name, description: req.body.description } 
+    });
+    res.status(201).json(cat);
+  } catch (error) {
+    res.status(500).json({ error: 'Error creating category' });
+  }
+});
+
+app.put('/api/categories/:id', authMiddleware, async (req, res) => {
+  try {
+    const cat = await prisma.category.update({
+      where: { id: parseInt(req.params.id) },
+      data: { name: req.body.name, description: req.body.description }
+    });
+    res.json(cat);
+  } catch (error) {
+    res.status(500).json({ error: 'Error updating category' });
+  }
+});
+
+app.delete('/api/categories/:id', authMiddleware, async (req, res) => {
+  try {
+    await prisma.category.delete({ where: { id: parseInt(req.params.id) } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting category' });
   }
 });
 
@@ -228,7 +326,7 @@ app.delete('/api/product-lines/:id', authMiddleware, async (req, res) => {
 app.get('/api/products', authMiddleware, async (req, res) => {
   try {
     const products = await prisma.product.findMany({
-      include: { variants: true, productLine: true },
+      include: { variants: true, productLine: true, category: true },
       orderBy: { createdAt: 'desc' }
     });
     res.json(products);
@@ -240,7 +338,7 @@ app.get('/api/products', authMiddleware, async (req, res) => {
 // Admin Route
 app.post('/api/products', authMiddleware, upload.any(), async (req, res) => {
   try {
-    const { name, description, price, costPrice, stock, variants, productLineId } = req.body;
+    const { name, description, price, costPrice, stock, variants, productLineId, categoryId } = req.body;
     let imageUrl = null;
     const mainImgFile = req.files?.find(f => f.fieldname === 'image');
     if (mainImgFile) {
@@ -267,6 +365,7 @@ app.post('/api/products', authMiddleware, upload.any(), async (req, res) => {
         stock: stock ? parseInt(stock) : 0,
         imageUrl,
         productLineId: productLineId ? parseInt(productLineId) : null,
+        categoryId: categoryId ? parseInt(categoryId) : null,
         variants: {
           create: parsedVariants.map(v => ({
             name: v.name,
@@ -289,7 +388,7 @@ app.post('/api/products', authMiddleware, upload.any(), async (req, res) => {
 app.put('/api/products/:id', authMiddleware, upload.any(), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, costPrice, stock, variants, productLineId } = req.body;
+    const { name, description, price, costPrice, stock, variants, productLineId, categoryId } = req.body;
     
     const existingProduct = await prisma.product.findUnique({ where: { id: parseInt(id) } });
     if (!existingProduct) return res.status(404).json({ error: 'Not found' });
@@ -322,6 +421,7 @@ app.put('/api/products/:id', authMiddleware, upload.any(), async (req, res) => {
         stock: stock ? parseInt(stock) : 0,
         imageUrl,
         productLineId: productLineId ? parseInt(productLineId) : null,
+        categoryId: categoryId ? parseInt(categoryId) : null,
         variants: {
           create: parsedVariants.map(v => ({
             name: v.name,
@@ -332,7 +432,7 @@ app.put('/api/products/:id', authMiddleware, upload.any(), async (req, res) => {
           }))
         }
       },
-      include: { variants: true, productLine: true }
+      include: { variants: true, productLine: true, category: true }
     });
     res.json(product);
   } catch (error) {
@@ -353,6 +453,60 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   }
 });
 
+
+// --- FINANCE INVENTORY ---
+app.get('/api/finances/inventory', authMiddleware, async (req, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      include: { productLine: true, category: true, variants: true }
+    });
+
+    let byLine = {};
+    let byCategory = {};
+    let byProduct = {};
+
+    products.forEach(p => {
+      let stock = p.stock || 0;
+      let cost = (p.costPrice ? parseFloat(p.costPrice) : 0) * stock;
+      let val = (p.price ? parseFloat(p.price) : 0) * stock;
+
+      if (p.variants && p.variants.length > 0) {
+        stock = 0; cost = 0; val = 0;
+        p.variants.forEach(v => {
+          let vStock = v.stock || 0;
+          stock += vStock;
+          cost += (v.costPrice ? parseFloat(v.costPrice) : 0) * vStock;
+          val += (v.price ? parseFloat(v.price) : 0) * vStock;
+        });
+      }
+
+      let profit = val - cost;
+
+      let pName = p.name;
+      let cName = p.category ? p.category.name : 'Sin Categoría';
+      let lName = p.productLine ? p.productLine.name : 'Sin Línea';
+
+      byProduct[pName] = byProduct[pName] || { cost: 0, value: 0, profit: 0 };
+      byProduct[pName].cost += cost;
+      byProduct[pName].value += val;
+      byProduct[pName].profit += profit;
+
+      byCategory[cName] = byCategory[cName] || { cost: 0, value: 0, profit: 0 };
+      byCategory[cName].cost += cost;
+      byCategory[cName].value += val;
+      byCategory[cName].profit += profit;
+
+      byLine[lName] = byLine[lName] || { cost: 0, value: 0, profit: 0 };
+      byLine[lName].cost += cost;
+      byLine[lName].value += val;
+      byLine[lName].profit += profit;
+    });
+
+    res.json({ byLine, byCategory, byProduct });
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching inventory finances' });
+  }
+});
 
 // --- FINANCE CATEGORY ROUTES ---
 app.get('/api/finance-categories', authMiddleware, async (req, res) => {
@@ -524,8 +678,9 @@ app.post('/api/checkout', async (req, res) => {
       
       let price = product.price;
       
+      let variant = null;
       if (item.variantId) {
-        const variant = product.variants.find(v => v.id === item.variantId);
+        variant = product.variants.find(v => v.id === item.variantId);
         if (variant) price = variant.price;
       }
       
@@ -562,11 +717,11 @@ app.post('/api/checkout', async (req, res) => {
     const order = await prisma.order.create({
       data: {
         customerName,
-        customerCedula,
+        customerCedula: customerCedula || "N/A",
         customerPhone,
         customerEmail,
-        locationMapLat,
-        locationMapLng,
+        locationMapLat: locationMapLat !== undefined && locationMapLat !== null ? String(locationMapLat) : null,
+        locationMapLng: locationMapLng !== undefined && locationMapLng !== null ? String(locationMapLng) : null,
         locationAddress,
         receiptImageBase64, // Guardar comprobante base64
         totalAmount,
@@ -575,7 +730,8 @@ app.post('/api/checkout', async (req, res) => {
         }
       },
       include: {
-        items: { include: { product: true, variant: true } }
+        items: { include: { product: true, variant: true } },
+        dueDates: true
       }
     });
 
@@ -600,6 +756,47 @@ app.post('/api/checkout', async (req, res) => {
       }))
     });
 
+    const allSettings = await prisma.setting.findMany();
+    const settingsMap = {};
+    allSettings.forEach(s => settingsMap[s.key] = s.value);
+
+    try {
+      // Enviar correos a los administradores
+      if (settingsMap.alert_emails) {
+        const emails = settingsMap.alert_emails.split(',').map(e => e.trim()).filter(e => e);
+        for (const email of emails) {
+          await sendEmail(email, `NUEVA ORDEN RECIBIDA: #${order.id} - ${customerName}`, `
+            <h2>Nueva Orden Recibida</h2>
+            <p><b>Cliente:</b> ${customerName}</p>
+            <p><b>Teléfono:</b> ${customerPhone}</p>
+            <p><b>Total:</b> $${Number(totalAmount).toFixed(2)}</p>
+            <a href="${orderLink}">Ver detalles en el panel</a>
+          `);
+        }
+      }
+
+      if (customerEmail) {
+        let emailHtml = '';
+        if (settingsMap.enable_template_new_order === 'true' && settingsMap.template_new_order) {
+          emailHtml = settingsMap.template_new_order
+            .replace(/\{\{customerName\}\}/g, customerName)
+            .replace(/\{\{orderId\}\}/g, order.id)
+            .replace(/\{\{totalAmount\}\}/g, Number(totalAmount).toFixed(2));
+        } else {
+          emailHtml = `
+            <h1>¡Gracias por tu pedido, ${customerName}!</h1>
+            <p>Hemos recibido tu pedido correctamente. Tu número de orden es <b>#${order.id}</b>.</p>
+            <p>Total a pagar: <b>$${Number(totalAmount).toFixed(2)}</b></p>
+            <p>Nos pondremos en contacto contigo a la brevedad para coordinar la entrega y/o pago.</p>
+          `;
+        }
+        await sendEmail(customerEmail, `Pedido Recibido #${order.id}`, emailHtml);
+      }
+    } catch (emailError) {
+      console.error("Error enviando correos de la orden:", emailError);
+      // No hacemos throw para no fallar el checkout
+    }
+
     res.status(201).json({ success: true, order });
   } catch (error) {
     console.error(error);
@@ -618,7 +815,8 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
       include: { 
         items: {
           include: { product: true, variant: true }
-        } 
+        },
+        dueDates: true
       }
     });
     res.json(orders);
@@ -631,12 +829,39 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
 app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, dueDates } = req.body;
+    
+    const updateData = { status };
+
+    if (status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates)) {
+      // Create due dates
+      updateData.dueDates = {
+        deleteMany: {}, // replace existing
+        create: dueDates.map(date => ({ dueDate: new Date(date) }))
+      };
+    }
+
     const order = await prisma.order.update({
       where: { id: parseInt(id) },
-      data: { status },
-      include: { items: { include: { product: true, variant: true } } }
+      data: updateData,
+      include: { items: { include: { product: true, variant: true } }, dueDates: true }
     });
+
+    if (status === 'PAID' && order.customerEmail) {
+      const allSettings = await prisma.setting.findMany();
+      const settingsMap = {};
+      allSettings.forEach(s => settingsMap[s.key] = s.value);
+      
+      if (settingsMap.enable_template_payment_validated === 'true' && settingsMap.template_payment_validated) {
+        const emailHtml = settingsMap.template_payment_validated
+          .replace(/\{\{customerName\}\}/g, order.customerName)
+          .replace(/\{\{orderId\}\}/g, order.id);
+        
+        const { sendEmail } = require('./mailer');
+        await sendEmail(order.customerEmail, `Pago Validado - Orden #${order.id}`, emailHtml);
+      }
+    }
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: 'Error updating order status' });
@@ -648,7 +873,7 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
   try {
     const {
       customerName, customerCedula, customerPhone, customerEmail,
-      locationAddress, items, notes
+      locationAddress, items, notes, status, dueDates
     } = req.body;
 
     let totalAmount = 0;
@@ -701,10 +926,15 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
         customerEmail: customerEmail || null,
         locationAddress: locationAddress || null,
         totalAmount,
-        status: 'PENDING',
-        items: { create: orderItemsData }
+        status: status || 'PENDING',
+        items: { create: orderItemsData },
+        ...(status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates) ? {
+          dueDates: {
+            create: dueDates.map(date => ({ dueDate: new Date(date) }))
+          }
+        } : {})
       },
-      include: { items: { include: { product: true, variant: true } } }
+      include: { items: { include: { product: true, variant: true } }, dueDates: true }
     });
     
     const adminHost = req.get('origin') || 'http://localhost';

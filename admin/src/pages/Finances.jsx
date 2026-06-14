@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Plus, Trash2, Loader2, TrendingUp, TrendingDown, DollarSign,
-  BarChart3, X, FileText, ShoppingBag, AlertTriangle, Briefcase, Edit
+  BarChart3, X, FileText, ShoppingBag, AlertTriangle, Briefcase, Edit, Package, Clock
 } from 'lucide-react';
 
 import api from '../api';
+import { exportToCSV } from '../utils/csv';
 
 // ── Modal: Categoría ───────────────────────────────────────────
 const CategoryModal = ({ onClose, onCreated, existingCategories }) => {
@@ -230,12 +231,13 @@ const Finances = ({ openNewExpense }) => {
   const location = useLocation();
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [accounts, setAccounts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [inventory, setInventory] = useState({ byLine: {}, byCategory: {}, byProduct: {} });
+  const [activeTab, setActiveTab] = useState('RESUMEN');
   
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [showAccountModal, setShowAccountModal] = useState(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -248,16 +250,18 @@ const Finances = ({ openNewExpense }) => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [eRes, cRes, aRes, oRes] = await Promise.all([
+      const [eRes, cRes, oRes, iRes, poRes] = await Promise.all([
         api.get('/expenses'),
         api.get('/finance-categories'),
-        api.get('/accounts'),
-        api.get('/orders?status=COMPLETED')
+        api.get('/orders?status=COMPLETED'),
+        api.get('/finances/inventory'),
+        api.get('/orders?status=PENDING_PAYMENT')
       ]);
       setExpenses(eRes.data);
       setCategories(cRes.data);
-      setAccounts(aRes.data);
       setOrders(oRes.data);
+      setInventory(iRes.data);
+      setPendingOrders(poRes.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -279,10 +283,45 @@ const Finances = ({ openNewExpense }) => {
   const totalExpenses = expenses.reduce((a, e) => a + Number(e.amount), 0);
   const netProfit = totalRevenue - totalExpenses;
   
-  // Capital Pendiente por Cobrar
-  const pendingReceivables = accounts
-    .filter(a => a.type === 'RECEIVABLE' && a.status === 'PENDING')
-    .reduce((a, curr) => a + Number(curr.amount), 0);
+  const handleExportCSV = () => {
+    if (activeTab === 'RESUMEN') {
+      const dataToExport = expenses.map(e => ({
+        ID: e.id,
+        Fecha: new Date(e.createdAt).toLocaleString(),
+        Titulo: e.title,
+        Monto: Number(e.amount).toFixed(2),
+        Categoria: e.category ? e.category.name : (e.legacyCategory || 'Sin Categoría')
+      }));
+      exportToCSV(dataToExport, 'gastos.csv');
+    } else if (activeTab === 'CUENTAS') {
+      const dataToExport = pendingOrders.flatMap(o => 
+        o.dueDates && o.dueDates.length > 0 
+          ? o.dueDates.map(d => ({
+              ID_Orden: o.id,
+              Cliente: o.customerName,
+              Total_Orden: Number(o.totalAmount).toFixed(2),
+              Fecha_Limite: new Date(d.dueDate).toLocaleDateString(),
+            }))
+          : [{
+              ID_Orden: o.id,
+              Cliente: o.customerName,
+              Total_Orden: Number(o.totalAmount).toFixed(2),
+              Fecha_Limite: 'Sin fechas limitadas',
+            }]
+      );
+      exportToCSV(dataToExport, 'cuentas_por_cobrar.csv');
+    } else if (activeTab === 'INVENTARIO') {
+      const dataToExport = Object.values(inventory.byProduct).map(p => ({
+        Producto: p.name,
+        Cantidad_Stock: p.count,
+        Costo_Total_Inventario: Number(p.cost).toFixed(2),
+        Ganancia_Total_Esperada: Number(p.profit).toFixed(2)
+      }));
+      exportToCSV(dataToExport, 'inventario_esperado.csv');
+    }
+  };
+  
+  // Removed pendingReceivables calculation
 
   const byCategory = {};
   for (const e of expenses) {
@@ -295,11 +334,11 @@ const Finances = ({ openNewExpense }) => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Finanzas</h1>
         <div className="flex gap-3">
+          <button onClick={handleExportCSV} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-gray-200 shadow-sm transition-colors">
+            Exportar CSV
+          </button>
           <button onClick={() => setShowCategoryModal(true)} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-gray-200">
             Categorías
-          </button>
-          <button onClick={() => setShowAccountModal(true)} className="bg-purple-100 text-purple-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-purple-200">
-            <Plus size={18} className="mr-1"/> Cuenta
           </button>
           <button onClick={() => setShowTransactionModal(true)} className="bg-red-500 text-white px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-red-600 shadow-sm">
             <Plus size={18} className="mr-1"/> Gasto
@@ -333,50 +372,23 @@ const Finances = ({ openNewExpense }) => {
         </div>
 
         <div className="bg-blue-50 p-6 rounded-2xl border border-blue-200 shadow-sm flex flex-col justify-between">
-          <p className="text-xs font-bold text-blue-600 uppercase mb-2 flex items-center gap-1"><Briefcase size={14}/> Por Cobrar</p>
+          <p className="text-xs font-bold text-blue-600 uppercase mb-2 flex items-center gap-1"><Package size={14}/> Total Productos</p>
           <div className="flex justify-between items-end">
-            <p className="text-3xl font-black text-blue-800">${pendingReceivables.toFixed(2)}</p>
+            <p className="text-3xl font-black text-blue-800">{Object.keys(inventory.byProduct).length}</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cuentas por Cobrar / Pagar */}
-        <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-            <h2 className="font-bold text-gray-800 flex items-center gap-2"><Briefcase size={18} className="text-purple-500" /> Cuentas por Cobrar / Pagar</h2>
-          </div>
-          <div className="p-0 max-h-80 overflow-y-auto">
-            {accounts.length === 0 ? <p className="text-center text-gray-400 py-10 text-sm">No hay cuentas registradas</p> : (
-              <div className="divide-y divide-gray-100">
-                {accounts.map(acc => {
-                  const isLate = acc.status === 'PENDING' && new Date(acc.dueDate) < new Date();
-                  return (
-                    <div key={acc.id} className="p-4 flex items-center justify-between hover:bg-gray-50 group transition-colors">
-                      <div className="flex items-center gap-4">
-                        <input type="checkbox" checked={acc.status === 'PAID'} onChange={() => handleUpdateAccountStatus(acc.id, acc.status)} className="w-5 h-5 rounded border-gray-300 text-purple-600 cursor-pointer" />
-                        <div>
-                          <p className={`font-semibold ${acc.status === 'PAID' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{acc.title}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${acc.type === 'PAYABLE' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                              {acc.type === 'PAYABLE' ? 'Por Pagar' : 'Por Cobrar'}
-                            </span>
-                            <span className={`text-xs flex items-center gap-1 font-semibold ${isLate ? 'text-red-500' : 'text-gray-500'}`}>
-                              {isLate && <AlertTriangle size={14} />} Vence: {new Date(acc.dueDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <span className={`font-black text-sm ${acc.type === 'PAYABLE' ? 'text-red-600' : 'text-green-600'}`}>
-                        {acc.type === 'PAYABLE' ? '-' : '+'}${Number(acc.amount).toFixed(2)}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+      <div className="flex border-b border-gray-200 mb-6 gap-6">
+        <button onClick={() => setActiveTab('RESUMEN')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'RESUMEN' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Resumen Financiero</button>
+        <button onClick={() => setActiveTab('CUENTAS')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'CUENTAS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cuentas por Cobrar</button>
+        <button onClick={() => setActiveTab('INVENTARIO')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'INVENTARIO' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Inventario Esperado</button>
+      </div>
+
+      {activeTab === 'RESUMEN' && (
+        <>
+
+        <div className="hidden">
 
         {/* Gastos por categoría */}
         <div className="bg-white rounded-2xl border shadow-sm p-6">
@@ -433,10 +445,91 @@ const Finances = ({ openNewExpense }) => {
           </tbody>
         </table>
       </div>
+      </>
+      )}
+
+      {activeTab === 'INVENTARIO' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {['byLine', 'byCategory', 'byProduct'].map((type, idx) => {
+              const titles = ['Por Línea de Producto', 'Por Categoría', 'Por Producto'];
+              return (
+                <div key={type} className="bg-white rounded-2xl border shadow-sm p-5">
+                  <h2 className="text-base font-black text-gray-800 mb-4">{titles[idx]}</h2>
+                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                    {Object.entries(inventory[type] || {}).map(([name, data]) => (
+                      <div key={name} className="border border-gray-100 rounded-xl p-3 hover:bg-gray-50">
+                        <p className="font-bold text-gray-700 mb-2 truncate">{name}</p>
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="text-gray-500 font-bold">Costo (Compra):</span>
+                          <span className="font-black text-gray-800">${data.cost.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="text-gray-500 font-bold">Valor (Venta):</span>
+                          <span className="font-black text-gray-800">${data.value.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-gray-100">
+                          <span className="text-gray-500 font-bold uppercase">Ganancia Neta:</span>
+                          <span className="font-black text-green-600">${data.profit.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'CUENTAS' && (
+        <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="font-bold text-gray-800 flex items-center gap-2"><Clock size={18} className="text-yellow-600"/> Cuentas por Cobrar (Órdenes)</h2>
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-white text-gray-400 font-bold uppercase text-xs border-b border-gray-100">
+              <tr>
+                <th className="p-4 px-6">Orden / Cliente</th>
+                <th className="p-4">Fechas Límite</th>
+                <th className="p-4">Monto Total</th>
+                <th className="p-4">Estado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pendingOrders.map(o => (
+                <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-4 px-6">
+                    <p className="font-bold text-gray-800">Pedido #{o.id}</p>
+                    <p className="text-xs text-gray-500">{o.customerName}</p>
+                  </td>
+                  <td className="p-4">
+                    {o.dueDates && o.dueDates.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {o.dueDates.map((d, i) => (
+                          <span key={i} className="text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded w-max">
+                            {new Date(d.dueDate).toLocaleDateString()}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic text-xs">Sin fecha asignada</span>
+                    )}
+                  </td>
+                  <td className="p-4 font-black text-gray-800">${Number(o.totalAmount).toFixed(2)}</td>
+                  <td className="p-4"><span className="text-[11px] font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-md">Por Cobrar</span></td>
+                </tr>
+              ))}
+              {pendingOrders.length === 0 && (
+                <tr><td colSpan="4" className="p-8 text-center text-gray-400">No hay cuentas por cobrar pendientes.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {showTransactionModal && <TransactionModal onClose={() => setShowTransactionModal(false)} onCreated={fetchAll} categories={categories} />}
       {showCategoryModal && <CategoryModal onClose={() => setShowCategoryModal(false)} onCreated={fetchAll} existingCategories={categories} />}
-      {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)} onCreated={fetchAll} />}
     </div>
   );
 };

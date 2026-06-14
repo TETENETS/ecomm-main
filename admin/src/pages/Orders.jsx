@@ -1,11 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
+import { exportToCSV } from '../utils/csv';
 import api from '../api';
 import {
   Package, Phone, MapPin, Eye, CheckCircle, XCircle, Clock,
   ChevronDown, ChevronUp, Loader2, Plus, Search, Filter,
   ShoppingCart, User, CreditCard, MessageCircle, X, Truck, RotateCcw, Link as LinkIcon
 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const STATUS_CONFIG = {
   PENDING_DELIVERY: { label: 'Entrega pendiente', bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', icon: Truck },
@@ -16,20 +29,73 @@ const STATUS_CONFIG = {
   PENDING: { label: 'Pendiente', bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200', icon: Clock },
 };
 
+const getImageUrl = (url) => {
+  if (!url) return '/placeholder.png';
+  if (url.startsWith('http')) return url;
+  return import.meta.env.DEV ? `http://localhost:3001${url}` : url;
+};
+
+const LocationSelector = ({ lat, lng, onChange }) => {
+  const defaultCenter = [10.2144, -64.6300];
+  const center = lat && lng ? [parseFloat(lat), parseFloat(lng)] : defaultCenter;
+  
+  const MapEvents = () => {
+    useMapEvents({
+      click(e) {
+        onChange(e.latlng.lat.toString(), e.latlng.lng.toString());
+      }
+    });
+    return null;
+  };
+
+  return (
+    <div className="h-48 w-full rounded-xl overflow-hidden border border-gray-200 relative z-0">
+      <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%', zIndex: 0 }}>
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <MapEvents />
+        {lat && lng && <Marker position={[parseFloat(lat), parseFloat(lng)]} />}
+      </MapContainer>
+    </div>
+  );
+};
+
 // ── Modal: detalle de pedido ──────────────────────────────────────
 const OrderModal = ({ order, onClose, onStatusChange }) => {
   const [saving, setSaving] = useState(false);
+  const [editDueDates, setEditDueDates] = useState(
+    order?.dueDates?.length > 0 ? order.dueDates.map(d => d.dueDate.split('T')[0]) : ['']
+  );
   if (!order) return null;
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
 
   const changeStatus = async (newStatus) => {
     setSaving(true);
     try {
-      await onStatusChange(order.id, newStatus);
+      await onStatusChange(order.id, newStatus, newStatus === 'PENDING_PAYMENT' ? editDueDates.filter(d => d) : undefined);
     } finally {
       setSaving(false);
     }
   };
+
+  const saveDueDates = async () => {
+    setSaving(true);
+    try {
+      await onStatusChange(order.id, order.status, editDueDates.filter(d => d));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const [newDueDate, setNewDueDate] = useState('');
+
+  const handleAddNewDueDate = () => {
+    if (newDueDate) {
+      setEditDueDates([...editDueDates, newDueDate]);
+      setNewDueDate('');
+    }
+  };
+
+  const removeEditDueDate = (i) => setEditDueDates(editDueDates.filter((_, idx) => idx !== i));
 
   const mapsUrl = order.locationMapLat && order.locationMapLng
     ? `https://www.google.com/maps?q=${order.locationMapLat},${order.locationMapLng}`
@@ -144,6 +210,38 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
             </div>
           </div>
 
+          {order.status === 'PENDING_PAYMENT' && (
+            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-yellow-700 uppercase block mb-2">Añadir nueva fecha límite</label>
+                <div className="flex gap-2">
+                  <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className="flex-1 p-2 rounded-lg border border-yellow-300 text-sm outline-none bg-white" />
+                  <button type="button" onClick={handleAddNewDueDate} className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-yellow-700 transition-colors">Agregar</button>
+                </div>
+              </div>
+
+              {editDueDates.length > 0 && (
+                <div className="pt-2 border-t border-yellow-200/50">
+                  <label className="text-xs font-bold text-yellow-700 uppercase block mb-2">Fechas Agregadas</label>
+                  <div className="space-y-2">
+                    {editDueDates.map((d, i) => (
+                      <div key={i} className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-yellow-200 shadow-sm">
+                        <span className="text-sm font-semibold text-gray-700">{new Date(d + 'T12:00:00Z').toLocaleDateString()}</span>
+                        <button type="button" onClick={() => removeEditDueDate(i)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"><X size={16}/></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-end pt-2 border-t border-yellow-200/50">
+                <button onClick={saveDueDates} disabled={saving} className="bg-yellow-600 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-yellow-700 disabled:opacity-60 flex items-center gap-2 transition-colors">
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Clock size={14} />} Guardar Cambios
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Acciones de estado */}
           <div className="border-t border-gray-100 pt-4">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Cambiar Estado</h3>
@@ -170,26 +268,74 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
 
 // ── Modal: crear pedido manual ───────────────────────────────────
 const NewOrderModal = ({ onClose, onCreated, products }) => {
-  const [form, setForm] = useState({ customerName: '', customerCedula: '', customerPhone: '', customerEmail: '', locationAddress: '' });
-  const [items, setItems] = useState([{ productId: '', variantId: '', quantity: 1 }]);
+  const [form, setForm] = useState({ 
+    customerName: '', customerCedula: '', 
+    phoneCountry: '+58', phoneArea: '414', phoneNum: '', 
+    customerEmail: '', locationAddress: '', locationMapLat: '', locationMapLng: '', status: 'PENDING' 
+  });
+  const [items, setItems] = useState([]);
+  const [dueDates, setDueDates] = useState([]);
+  const [newDueDate, setNewDueDate] = useState('');
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filterCat, setFilterCat] = useState('');
+  const [filterLine, setFilterLine] = useState('');
 
-  const addItem = () => setItems([...items, { productId: '', variantId: '', quantity: 1 }]);
-  const removeItem = (i) => setItems(items.filter((_, idx) => idx !== i));
-  const updateItem = (i, field, val) => {
+  const AREA_CODES = ['414','424','412','416','426','212'];
+
+  const categories = [...new Set(products.map(p => p.category?.name).filter(Boolean))];
+  const lines = [...new Set(products.map(p => p.productLine?.name).filter(Boolean))];
+
+  const filteredProducts = products.filter(p => {
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterCat && p.category?.name !== filterCat) return false;
+    if (filterLine && p.productLine?.name !== filterLine) return false;
+    if (p.stock <= 0 && (!p.variants || p.variants.every(v => v.stock <= 0))) return false;
+    return true;
+  });
+
+  const addItem = (p, variant = null) => {
+    const existing = items.find(i => i.productId === p.id && i.variantId === variant?.id);
+    if (existing) {
+      setItems(items.map(i => i === existing ? { ...i, quantity: i.quantity + 1 } : i));
+    } else {
+      setItems([...items, { productId: p.id, variantId: variant?.id, quantity: 1, p, variant }]);
+    }
+  };
+
+  const updateItemQty = (i, qty) => {
     const n = [...items];
-    n[i][field] = val;
-    if (field === 'productId') n[i].variantId = '';
+    n[i].quantity = Math.max(1, parseInt(qty) || 1);
     setItems(n);
   };
+  const removeItem = (i) => setItems(items.filter((_, idx) => idx !== i));
+
+  const handleAddNewDueDate = () => {
+    if (newDueDate) {
+      setDueDates([...dueDates, newDueDate]);
+      setNewDueDate('');
+    }
+  };
+  const removeDueDate = (i) => setDueDates(dueDates.filter((_, idx) => idx !== i));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.customerName.trim()) return alert('Debes ingresar el nombre del cliente');
+    if (!form.customerEmail.trim()) return alert('Debes ingresar el email del cliente');
+    if (items.length === 0) return alert('Debes agregar al menos un producto al pedido');
     setSaving(true);
     try {
       const payload = {
-        ...form,
-        items: items.filter(it => it.productId).map(it => ({
+        customerName: form.customerName,
+        customerCedula: form.customerCedula,
+        customerPhone: `${form.phoneCountry}${form.phoneArea}${form.phoneNum}`,
+        customerEmail: form.customerEmail,
+        locationAddress: form.locationAddress,
+        locationMapLat: form.locationMapLat,
+        locationMapLng: form.locationMapLng,
+        status: form.status,
+        dueDates: form.status === 'PENDING_PAYMENT' ? dueDates.filter(d => d) : undefined,
+        items: items.map(it => ({
           productId: parseInt(it.productId),
           variantId: it.variantId ? parseInt(it.variantId) : null,
           quantity: parseInt(it.quantity)
@@ -205,68 +351,182 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Plus size={20} className="text-blue-600" /> Nuevo Pedido Manual</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl"><X size={20} className="text-gray-500" /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[['customerName','Nombre Completo *',true],['customerCedula','Cédula *',true],['customerPhone','Teléfono *',true],['customerEmail','Email',false]].map(([k,l,req]) => (
-              <div key={k}>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{l}</label>
-                <input required={req} value={form[k]} onChange={e => setForm({...form, [k]: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row" onClick={e => e.stopPropagation()}>
+        
+        {/* Panel Izquierdo: Formulario */}
+        <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-gray-100 flex flex-col max-h-[90vh]">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Plus size={20} className="text-blue-600" /> Nuevo Pedido</h2>
+            <button onClick={onClose} className="md:hidden p-2 hover:bg-gray-100 rounded-xl"><X size={20} /></button>
+          </div>
+          
+          <form id="orderForm" onSubmit={handleSubmit} className="space-y-4 flex-1">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre Completo *</label>
+                <input required value={form.customerName} onChange={e => setForm({...form, customerName: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
               </div>
-            ))}
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Dirección</label>
-            <input value={form.locationAddress} onChange={e => setForm({...form, locationAddress: e.target.value})}
-              className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Productos</label>
-              <button type="button" onClick={addItem} className="text-xs font-bold text-blue-600 hover:underline">+ Añadir</button>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cédula *</label>
+                <input required value={form.customerCedula} onChange={e => setForm({...form, customerCedula: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
+              </div>
             </div>
-            <div className="space-y-2">
-              {items.map((it, i) => {
-                const prod = products.find(p => p.id === parseInt(it.productId));
-                return (
-                  <div key={i} className="flex gap-2 items-center">
-                    <select value={it.productId} onChange={e => updateItem(i,'productId',e.target.value)}
-                      className="flex-1 border border-gray-200 p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
-                      <option value="">-- Producto --</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    {prod?.variants?.length > 0 && (
-                      <select value={it.variantId} onChange={e => updateItem(i,'variantId',e.target.value)}
-                        className="w-36 border border-gray-200 p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
-                        <option value="">Variante</option>
-                        {prod.variants.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                      </select>
-                    )}
-                    <input type="number" min="1" value={it.quantity} onChange={e => updateItem(i,'quantity',e.target.value)}
-                      className="w-16 border border-gray-200 p-2.5 rounded-xl text-sm text-center outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50" />
-                    {items.length > 1 && (
-                      <button type="button" onClick={() => removeItem(i)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg"><X size={16} /></button>
-                    )}
+
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono *</label>
+              <div className="flex gap-2">
+                <select value={form.phoneCountry} onChange={e => setForm({...form, phoneCountry: e.target.value})} className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none">
+                  <option value="+58">+58</option>
+                </select>
+                <select value={form.phoneArea} onChange={e => setForm({...form, phoneArea: e.target.value})} className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none">
+                  {AREA_CODES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input required type="text" placeholder="Ej: 1234567" value={form.phoneNum} onChange={e => setForm({...form, phoneNum: e.target.value.replace(/\D/g,'')})} className="flex-1 bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email *</label>
+                <input required type="email" value={form.customerEmail} onChange={e => setForm({...form, customerEmail: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label>
+                <select value={form.status} onChange={e => setForm({...form, status: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none">
+                  <option value="PENDING">Pendiente</option>
+                  <option value="PENDING_PAYMENT">Por Cobrar</option>
+                  <option value="COMPLETED">Completado</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dirección (Texto)</label>
+              <input value={form.locationAddress} onChange={e => setForm({...form, locationAddress: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Ubicación en el Mapa (Opcional)</label>
+              <LocationSelector 
+                lat={form.locationMapLat} 
+                lng={form.locationMapLng} 
+                onChange={(lat, lng) => setForm({...form, locationMapLat: lat, locationMapLng: lng})} 
+              />
+              <div className="flex justify-end mt-2">
+                <button type="button" onClick={() => setForm({...form, locationMapLat: '10.2144', locationMapLng: '-64.6300'})} className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
+                  <MapPin size={12}/> Usar Coordenadas Default (Puerto la Cruz)
+                </button>
+              </div>
+            </div>
+
+            {form.status === 'PENDING_PAYMENT' && (
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-yellow-700 uppercase block mb-2">Añadir nueva fecha límite</label>
+                  <div className="flex gap-2">
+                    <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className="flex-1 p-2 rounded-lg border border-yellow-300 text-sm outline-none bg-white" />
+                    <button type="button" onClick={handleAddNewDueDate} className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-yellow-700 transition-colors">Agregar</button>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold">Cancelar</button>
-            <button type="submit" disabled={saving} className="bg-blue-600 text-white font-bold px-7 py-2.5 rounded-xl hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60">
-              {saving && <Loader2 size={16} className="animate-spin" />}
-              {saving ? 'Creando...' : 'Crear Pedido'}
+                {dueDates.length > 0 && (
+                  <div className="pt-2 border-t border-yellow-200/50">
+                    <label className="text-xs font-bold text-yellow-700 uppercase block mb-2">Fechas Agregadas</label>
+                    <div className="space-y-2">
+                      {dueDates.map((d, i) => (
+                        <div key={i} className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-yellow-200 shadow-sm">
+                          <span className="text-sm font-semibold text-gray-700">{new Date(d + 'T12:00:00Z').toLocaleDateString()}</span>
+                          <button type="button" onClick={() => removeDueDate(i)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"><X size={16}/></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div>
+              <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Productos Seleccionados ({items.length})</h3>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {items.length === 0 ? <p className="text-sm text-gray-400">No has seleccionado productos.</p> : items.map((it, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-xl border border-gray-100">
+                    <img src={getImageUrl(it.variant?.imageUrl || it.p.imageUrl)} className="w-10 h-10 rounded-lg object-cover bg-white" alt="" />
+                    <div className="flex-1 overflow-hidden">
+                      <p className="text-sm font-bold text-gray-700 truncate">{it.p.name}</p>
+                      {it.variant && <p className="text-[10px] text-blue-600 font-bold">{it.variant.name}</p>}
+                    </div>
+                    <input type="number" min="1" value={it.quantity} onChange={e => updateItemQty(i, e.target.value)} className="w-16 border border-gray-200 p-1 rounded-lg text-sm text-center" />
+                    <button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600 p-1"><X size={16} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </form>
+
+          <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3">
+            <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold flex-1">Cancelar</button>
+            <button form="orderForm" type="submit" disabled={saving} className="bg-blue-600 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-60 flex-1 flex justify-center items-center">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : 'Crear Pedido'}
             </button>
           </div>
-        </form>
+        </div>
+
+        {/* Panel Derecho: Buscador de Productos */}
+        <div className="hidden md:flex w-1/2 bg-gray-50 flex-col p-6 max-h-[90vh]">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-black text-gray-800">Catálogo</h3>
+            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-xl"><X size={20} className="text-gray-500" /></button>
+          </div>
+
+          <div className="space-y-3 mb-4 flex-shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 text-gray-400" size={16} />
+              <input type="text" placeholder="Buscar producto..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm outline-none" />
+            </div>
+            <div className="flex gap-2">
+              <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="flex-1 bg-white border border-gray-200 p-2 rounded-xl text-xs outline-none">
+                <option value="">Todas las Categorías</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filterLine} onChange={e => setFilterLine(e.target.value)} className="flex-1 bg-white border border-gray-200 p-2 rounded-xl text-xs outline-none">
+                <option value="">Todas las Líneas</option>
+                {lines.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+            {filteredProducts.map(p => (
+              <div key={p.id} className="bg-white border border-gray-200 rounded-xl p-3 space-y-3">
+                <div className="flex items-center gap-3">
+                  <img src={getImageUrl(p.imageUrl)} className="w-12 h-12 rounded-xl object-cover" alt="" />
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-800 text-sm">{p.name}</p>
+                    <p className="text-[10px] text-gray-500">{p.category?.name || 'Sin Categoría'} • {p.productLine?.name || 'Sin Línea'}</p>
+                  </div>
+                  {!p.variants?.length ? (
+                    <button type="button" onClick={() => addItem(p)} className="bg-blue-100 text-blue-600 p-2 rounded-lg hover:bg-blue-200 shrink-0"><Plus size={16} /></button>
+                  ) : null}
+                </div>
+                {p.variants?.length > 0 && (
+                  <div className="pl-14 space-y-1">
+                    {p.variants.filter(v => v.stock > 0).map(v => (
+                      <div key={v.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        <span className="text-xs font-semibold text-gray-700">{v.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">${v.price} (Stock: {v.stock})</span>
+                          <button type="button" onClick={() => addItem(p, v)} className="bg-gray-200 text-gray-700 p-1 rounded hover:bg-gray-300"><Plus size={14} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {filteredProducts.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No hay productos disponibles.</p>}
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -314,10 +574,12 @@ const Orders = ({ openNewOrder }) => {
   };
 
 
-  const handleStatusChange = async (id, status) => {
-    await api.patch(`/orders/${id}/status`, { status });
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-    if (selectedOrder?.id === id) setSelectedOrder(prev => ({ ...prev, status }));
+  const handleStatusChange = async (id, status, dueDates) => {
+    const payload = { status };
+    if (dueDates) payload.dueDates = dueDates;
+    const res = await api.patch(`/orders/${id}/status`, payload);
+    setOrders(prev => prev.map(o => o.id === id ? res.data : o));
+    if (selectedOrder?.id === id) setSelectedOrder(res.data);
   };
 
   const filtered = orders.filter(o =>
@@ -334,15 +596,37 @@ const Orders = ({ openNewOrder }) => {
     REFUNDED: orders.filter(o => o.status === 'REFUNDED').length,
   };
 
+  const handleExportCSV = () => {
+    const dataToExport = filtered.map(o => ({
+      ID: o.id,
+      Fecha: new Date(o.createdAt).toLocaleString(),
+      Cliente: o.customerName,
+      Cedula: o.customerCedula,
+      Telefono: o.customerPhone,
+      Email: o.customerEmail || '',
+      Total: Number(o.totalAmount).toFixed(2),
+      Estado: STATUS_CONFIG[o.status]?.label || o.status,
+      Direccion: o.locationAddress || '',
+      Productos: o.items?.map(i => `${i.product?.name} x${i.quantity}`).join(' | ') || ''
+    }));
+    exportToCSV(dataToExport, 'ordenes.csv');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-center gap-3">
         <h1 className="text-2xl font-bold text-gray-800">Órdenes</h1>
-        <button onClick={() => setShowNewOrder(true)}
-          className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm">
-          <Plus size={20} /> Nuevo Pedido
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleExportCSV}
+            className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
+            Exportar CSV
+          </button>
+          <button onClick={() => setShowNewOrder(true)}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm">
+            <Plus size={20} /> Nuevo Pedido
+          </button>
+        </div>
       </div>
 
       {/* Tabs de estado */}
