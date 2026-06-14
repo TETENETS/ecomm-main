@@ -194,7 +194,7 @@ app.post('/api/product-lines', authMiddleware, upload.any(), async (req, res) =>
     });
     res.status(201).json(line);
   } catch (error) {
-    res.status(500).json({ error: 'Error creating product line' });
+    res.status(500).json({ error: 'Error creating product line-' });
   }
 });
 
