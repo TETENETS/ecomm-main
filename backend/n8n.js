@@ -15,7 +15,7 @@ const generateEmailTemplate = (alertType, message, data, settingsMap = {}) => {
     return template
       .replace(/\{\{alertMessage\}\}/g, message)
       .replace(/\{\{productName\}\}/g, data.productName || data.name || 'Desconocido')
-      .replace(/\{\{stock\}\}/g, data.stock !== undefined ? data.stock : 'N/A')
+      .replace(/\{\{stock\}\}/g, data.stock !== undefined ? data.stock : (data.remaining !== undefined ? data.remaining : 'N/A'))
       .replace(/\{\{orderId\}\}/g, data.orderId || data.id || 'N/A')
       .replace(/\{\{customerName\}\}/g, data.customerName || 'N/A')
       .replace(/\{\{total\}\}/g, data.total || data.amount || '0.00')
@@ -31,7 +31,7 @@ const generateEmailTemplate = (alertType, message, data, settingsMap = {}) => {
         <p>${message}</p>
         <ul>
           <li><strong>Producto:</strong> ${data.productName || data.name || 'Desconocido'}</li>
-          <li><strong>Stock Actual:</strong> ${data.stock !== undefined ? data.stock : 'N/A'}</li>
+          <li><strong>Stock Actual:</strong> ${data.stock !== undefined ? data.stock : (data.remaining !== undefined ? data.remaining : 'N/A')}</li>
         </ul>
       `);
       break;
