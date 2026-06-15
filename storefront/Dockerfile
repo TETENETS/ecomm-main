@@ -5,6 +5,12 @@ RUN npm install
 COPY . .
 ARG VITE_BACKEND_URL
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+
+# Mover archivos estáticos a public/ para que Vite los copie a dist/
+RUN mkdir -p public/js && \
+    cp -r css fonts img scss style.css public/ && \
+    cp -r js/jquery js/bootstrap.min.js js/popper.min.js js/plugins.js js/classy-nav.min.js js/active.js js/map-active.js public/js/
+
 RUN npm run build
 
 FROM nginx:alpine
