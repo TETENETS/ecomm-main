@@ -27,7 +27,8 @@ api.interceptors.response.use(
       };
       
       // Async fire-and-forget log
-      axios.post((import.meta.env.DEV ? 'http://localhost:3001/api' : '/api') + '/logs', {
+      const baseURL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
+      axios.post(baseURL + '/logs', {
         level: 'ERROR',
         source: 'ADMIN',
         action: `API Error: ${error.config.method.toUpperCase()} ${error.config.url}`,

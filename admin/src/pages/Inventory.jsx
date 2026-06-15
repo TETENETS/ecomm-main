@@ -571,7 +571,7 @@ const Inventory = () => {
                               )}
                             </div>
                             {p.imageUrl ? 
-                              <img src={import.meta.env.DEV ? `http://localhost:3001${p.imageUrl}` : p.imageUrl} className="w-10 h-10 shrink-0 rounded-lg object-cover bg-gray-100 border border-gray-200" alt={p.name} /> 
+                              <img src={import.meta.env.DEV ? `http://localhost:3001${p.imageUrl}` : `${import.meta.env.VITE_BACKEND_URL || ''}${p.imageUrl}`} className="w-10 h-10 shrink-0 rounded-lg object-cover bg-gray-100 border border-gray-200" alt={p.name} /> 
                               : <div className="w-10 h-10 shrink-0 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-300"><ImageIcon size={18}/></div>
                             }
                             <div className="flex-1 min-w-[150px]">
@@ -620,7 +620,7 @@ const Inventory = () => {
                                   return (
                                     <tr key={v.id} className="border-b border-gray-100/50 last:border-0">
                                       <td className="py-2.5 flex items-center gap-3">
-                                        {v.imageUrl && <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : v.imageUrl} className="w-7 h-7 rounded object-cover border" alt={v.name} />}
+                                        {v.imageUrl && <img src={import.meta.env.DEV ? `http://localhost:3001${v.imageUrl}` : `${import.meta.env.VITE_BACKEND_URL || ''}${v.imageUrl}`} className="w-7 h-7 rounded object-cover border" alt={v.name} />}
                                         <span className="font-semibold text-gray-700">{v.name}</span>
                                       </td>
                                       <td className="py-2.5 text-gray-600 text-xs">{v.stock}</td>

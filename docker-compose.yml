@@ -25,6 +25,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+    volumes:
+      - uploads_data:/app/uploads
     expose:
       - "3001"
 
@@ -50,3 +52,4 @@ services:
 
 volumes:
   postgres_data_2:
+  uploads_data:
