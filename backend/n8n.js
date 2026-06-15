@@ -1,4 +1,5 @@
 const axios = require('axios');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_WHATSAPP || process.env.N8N_WEBHOOK_URL;
@@ -77,27 +78,52 @@ const generateEmailTemplate = (alertType, message, data) => {
 };
 
 const sendAlert = async (alertType, message, data = {}) => {
-  if (!N8N_WEBHOOK_URL) {
+  // 1. Enviar a N8N (Data cruda)
+  if (N8N_WEBHOOK_URL) {
+    try {
+      const payload = {
+        alertType, // 'LOW_STOCK', 'NEW_ORDER', 'ACCOUNT_DUE_SOON', 'ACCOUNT_DUE_TODAY'
+        message,
+        timestamp: new Date().toISOString(),
+        data
+      };
+      await axios.post(N8N_WEBHOOK_URL, payload);
+      console.log(`[N8N] Alerta enviada con éxito: ${alertType}`);
+    } catch (error) {
+      console.error(`[N8N] Error al enviar alerta (${alertType}) a n8n:`, error.message);
+    }
+  } else {
     console.warn(`[N8N] No se encontró URL de Webhook para alerta: ${alertType}`);
-    return;
   }
 
-  try {
-    const { emailSubject, emailHtml } = generateEmailTemplate(alertType, message, data);
+  // 2. Enviar por SMTP (Nodemailer)
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT || 587,
+        secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
 
-    const payload = {
-      alertType, // 'LOW_STOCK', 'NEW_ORDER', 'ACCOUNT_DUE_SOON', 'ACCOUNT_DUE_TODAY'
-      message,
-      emailSubject,
-      emailHtml,
-      timestamp: new Date().toISOString(),
-      data
-    };
+      const { emailSubject, emailHtml } = generateEmailTemplate(alertType, message, data);
 
-    await axios.post(N8N_WEBHOOK_URL, payload);
-    console.log(`[N8N] Alerta enviada con éxito: ${alertType}`);
-  } catch (error) {
-    console.error(`[N8N] Error al enviar alerta (${alertType}) a n8n:`, error.message);
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || `"Sistema E-commerce" <${process.env.SMTP_USER}>`,
+        to: process.env.SMTP_TO || process.env.SMTP_USER, // Si no hay TO, enviar al mismo correo
+        subject: emailSubject,
+        html: emailHtml,
+      });
+
+      console.log(`[SMTP] Correo enviado con éxito: ${alertType}`);
+    } catch (error) {
+      console.error(`[SMTP] Error al enviar correo (${alertType}):`, error.message);
+    }
+  } else {
+    console.warn(`[SMTP] Faltan variables de entorno SMTP_HOST, SMTP_USER o SMTP_PASS. No se enviará correo.`);
   }
 };
 
