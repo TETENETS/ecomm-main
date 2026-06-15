@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                 <option value="426">426</option>
                                                 <option value="422">422</option>
                                             </select>
-                                            <input type="text" class="form-control" id="phoneNum" placeholder="1234567" required minlength="7" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="border-left: none; border-radius: 0;">
+                                            <input type="text" class="form-control" id="phoneNum" placeholder="1234567" required minlength="7" maxlength="7" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="border-left: none; border-radius: 0;">
                                         </div>
                                     </div>
                                     <div class="col-md-6 mb-3">
@@ -267,7 +267,7 @@ function initMapLogic() {
         try {
             const payload = {
                 customerName: document.getElementById('customerName').value,
-                customerPhone: `${document.getElementById('phoneCountry').value}${document.getElementById('phoneArea').value}${document.getElementById('phoneNum').value.replace(/\D/g, '')}`,
+                customerPhone: `${document.getElementById('phoneCountry').value.replace(/\D/g, '')}${document.getElementById('phoneArea').value.replace(/\D/g, '')}${document.getElementById('phoneNum').value.replace(/\D/g, '')}`,
                 customerEmail: document.getElementById('customerEmail').value,
                 paymentMethod: document.getElementById('paymentMethod').value,
                 locationAddress: document.getElementById('locationAddress').value,
