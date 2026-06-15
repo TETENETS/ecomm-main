@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecomm_password}
       POSTGRES_DB: ${POSTGRES_DB:-ecomm_db}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_2:/var/lib/postgresql/data
     expose:
       - "5432"
 
@@ -48,4 +48,4 @@ services:
       - "80"
 
 volumes:
-  postgres_data:
+  postgres_data_2:
