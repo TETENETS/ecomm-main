@@ -42,6 +42,16 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <label for="customerEmail">Correo Electrónico</label>
                                         <input type="email" class="form-control" id="customerEmail">
                                     </div>
+                                    <div class="col-12 mb-3 mt-2">
+                                        <label for="paymentMethod">Método de Pago <span>*</span></label>
+                                        <select class="form-control" id="paymentMethod" required>
+                                            <option value="">Seleccione un método de pago...</option>
+                                            <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
+                                            <option value="Transferencia ($)">Transferencia ($)</option>
+                                            <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                                            <option value="Efectivo ($)">Efectivo ($)</option>
+                                        </select>
+                                    </div>
                                     <div class="col-12 mb-3">
                                         <label for="locationAddress">Dirección de Entrega <span>*</span></label>
                                         <input type="text" class="form-control" id="locationAddress" required>
@@ -109,6 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCartUI();
     initMapLogic();
     
+    const paymentMethodEl = document.getElementById('paymentMethod');
+    if (paymentMethodEl) {
+        paymentMethodEl.addEventListener('change', () => {
+            renderCheckoutOrder();
+        });
+    }
+    
     fetchBCV().then(() => {
         renderCheckoutOrder();
         // re-render cart UI in case it was rendered before BCV was fetched
@@ -120,6 +137,9 @@ function renderCheckoutOrder() {
     const list = document.getElementById('checkout-cart-list');
     if (!list) return;
 
+    const paymentMethodEl = document.getElementById('paymentMethod');
+    const isBs = paymentMethodEl && paymentMethodEl.value.includes('(Bs)');
+
     const cart = getCart();
     list.innerHTML = `<li><span>Producto</span> <span>Total</span></li>`;
     
@@ -128,13 +148,33 @@ function renderCheckoutOrder() {
         const itemPrice = Number(item.price) || 0;
         const itemTotal = itemPrice * item.quantity;
         total += itemTotal;
-        list.innerHTML += `<li><span>${item.productName} x ${item.quantity}</span> <span style="text-align: right;">$${itemTotal.toFixed(2)}<br><small>Bs. ${(itemTotal * window.tasaBCV).toFixed(2)}</small></span></li>`;
+        const totalBs = itemTotal * window.tasaBCV;
+        
+        let priceHtml = '';
+        if (isBs) {
+            priceHtml = `Bs. ${totalBs.toFixed(2)}<br><small>$${itemTotal.toFixed(2)}</small>`;
+        } else {
+            priceHtml = `$${itemTotal.toFixed(2)}<br><small>Bs. ${totalBs.toFixed(2)}</small>`;
+        }
+        
+        list.innerHTML += `<li><span>${item.productName} x ${item.quantity}</span> <span style="text-align: right;">${priceHtml}</span></li>`;
     });
 
+    const totalBsAll = total * window.tasaBCV;
+    let subtotalHtml = '';
+    let totalHtml = '';
+    
+    if (isBs) {
+        subtotalHtml = `Bs. ${totalBsAll.toFixed(2)}<br><small>$${total.toFixed(2)}</small>`;
+        totalHtml = `Bs. ${totalBsAll.toFixed(2)}<br><small>$${total.toFixed(2)}</small>`;
+    } else {
+        subtotalHtml = `$${total.toFixed(2)}<br><small>Bs. ${totalBsAll.toFixed(2)}</small>`;
+        totalHtml = `$${total.toFixed(2)}<br><small>Bs. ${totalBsAll.toFixed(2)}</small>`;
+    }
+
     list.innerHTML += `
-        <li><span>Subtotal</span> <span style="text-align: right;">$${total.toFixed(2)}<br><small>Bs. ${(total * window.tasaBCV).toFixed(2)}</small></span></li>
-        <li><span>Envío</span> <span>Gratis</span></li>
-        <li><span>Total</span> <span style="text-align: right;">$${total.toFixed(2)}<br><small>Bs. ${(total * window.tasaBCV).toFixed(2)}</small></span></li>
+        <li><span>Subtotal</span> <span style="text-align: right;">${subtotalHtml}</span></li>
+        <li style="border-top: 1px solid #ebebeb; padding-top: 10px; margin-top: 10px;"><span>Total</span> <span style="text-align: right; font-weight: bold;">${totalHtml}</span></li>
     `;
 }
 
@@ -229,6 +269,7 @@ function initMapLogic() {
                 customerName: document.getElementById('customerName').value,
                 customerPhone: `${document.getElementById('phoneCountry').value}${document.getElementById('phoneArea').value}${document.getElementById('phoneNum').value.replace(/\D/g, '')}`,
                 customerEmail: document.getElementById('customerEmail').value,
+                paymentMethod: document.getElementById('paymentMethod').value,
                 locationAddress: document.getElementById('locationAddress').value,
                 locationMapLat: parseFloat(latInput.value),
                 locationMapLng: parseFloat(lngInput.value),

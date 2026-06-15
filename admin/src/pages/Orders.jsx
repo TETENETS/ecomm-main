@@ -62,6 +62,8 @@ const LocationSelector = ({ lat, lng, onChange }) => {
 // ── Modal: detalle de pedido ──────────────────────────────────────
 const OrderModal = ({ order, onClose, onStatusChange }) => {
   const [saving, setSaving] = useState(false);
+  const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(order?.paymentMethod || 'Pago Móvil (Bs)');
   const [editDueDates, setEditDueDates] = useState(
     order?.dueDates?.length > 0 ? order.dueDates.map(d => d.dueDate.split('T')[0]) : ['']
   );
@@ -69,9 +71,19 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
 
   const changeStatus = async (newStatus) => {
+    if (newStatus === 'COMPLETED' && !showPaymentPrompt) {
+      setShowPaymentPrompt(true);
+      return;
+    }
     setSaving(true);
     try {
-      await onStatusChange(order.id, newStatus, newStatus === 'PENDING_PAYMENT' ? editDueDates.filter(d => d) : undefined);
+      await onStatusChange(
+        order.id, 
+        newStatus, 
+        newStatus === 'PENDING_PAYMENT' ? editDueDates.filter(d => d) : undefined,
+        newStatus === 'COMPLETED' ? selectedPaymentMethod : undefined
+      );
+      setShowPaymentPrompt(false);
     } finally {
       setSaving(false);
     }
@@ -135,28 +147,51 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Cliente */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Datos del Cliente</h3>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <User size={18} className="text-blue-600" />
+          <div className="bg-gray-50 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+                <User size={24} />
               </div>
               <div>
-                <p className="font-bold text-gray-800">{order.customerName}</p>
+                <h3 className="font-bold text-gray-800">{order.customerName}</h3>
                 <p className="text-sm text-gray-500">Cédula: {order.customerCedula}</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3 pt-2">
-              <a href={waUrl} target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-bold hover:bg-green-600 transition-colors">
-                <MessageCircle size={16} /> {order.customerPhone}
-              </a>
-              {order.customerEmail && (
-                <span className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold">
-                  {order.customerEmail}
-                </span>
-              )}
+            
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <a href={waUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-[#25D366] text-white px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90">
+                  <MessageCircle size={16}/> {order.customerPhone}
+                </a>
+                {order.customerEmail && (
+                  <div className="flex items-center gap-2 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold">
+                    {order.customerEmail}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-end gap-2 mt-2">
+                <label className="text-xs font-bold text-gray-500 uppercase">Método de Pago:</label>
+                <select
+                  value={order.paymentMethod || ''}
+                  onChange={async (e) => {
+                    const newMethod = e.target.value;
+                    setSaving(true);
+                    try {
+                      await onStatusChange(order.id, order.status, undefined, newMethod);
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  disabled={saving}
+                  className="p-1 rounded border border-gray-200 text-sm font-semibold text-gray-700 bg-white outline-none focus:border-blue-500"
+                >
+                  <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
+                  <option value="Transferencia ($)">Transferencia ($)</option>
+                  <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                  <option value="Efectivo ($)">Efectivo ($)</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -205,8 +240,23 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
               ))}
             </div>
             <div className="mt-4 flex justify-between items-center pt-3 border-t border-gray-200">
-              <span className="font-bold text-gray-500">Total</span>
-              <span className="text-xl font-black text-gray-800">${Number(order.totalAmount).toFixed(2)}</span>
+              <div className="flex flex-col">
+                <span className="font-bold text-gray-500">Total</span>
+                {order.bcvRate && <span className="text-xs text-gray-400">Tasa BCV Aplicada: {Number(order.bcvRate).toFixed(2)} Bs/$</span>}
+              </div>
+              <div className="text-right">
+                {order.paymentMethod && order.paymentMethod.includes('(Bs)') ? (
+                  <>
+                    <span className="text-xl font-black text-gray-800 block">Bs. {order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2)}</span>
+                    <span className="text-sm font-bold text-gray-500">${Number(order.totalAmount).toFixed(2)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xl font-black text-gray-800 block">${Number(order.totalAmount).toFixed(2)}</span>
+                    {order.totalAmountBs && <span className="text-sm font-bold text-gray-500">Bs. {Number(order.totalAmountBs).toFixed(2)}</span>}
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -245,20 +295,47 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
           {/* Acciones de estado */}
           <div className="border-t border-gray-100 pt-4">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Cambiar Estado</h3>
-            <div className="flex gap-3 flex-wrap">
-              {Object.entries(STATUS_CONFIG).map(([key, val]) => (
-                <button
-                  key={key}
-                  disabled={order.status === key || saving}
-                  onClick={() => changeStatus(key)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed
-                    ${order.status === key ? `${val.bg} ${val.text} ${val.border}` : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                >
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <val.icon size={14} />}
-                  {val.label}
-                </button>
-              ))}
-            </div>
+            
+            {showPaymentPrompt ? (
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-4 mb-4">
+                <div>
+                  <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Confirmar Método de Pago</label>
+                  <select 
+                    value={selectedPaymentMethod} 
+                    onChange={e => setSelectedPaymentMethod(e.target.value)} 
+                    className="w-full p-2.5 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium text-gray-700"
+                  >
+                    <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
+                    <option value="Transferencia ($)">Transferencia ($)</option>
+                    <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                    <option value="Efectivo ($)">Efectivo ($)</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowPaymentPrompt(false)} className="w-1/3 bg-white text-gray-600 border border-gray-300 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={() => changeStatus('COMPLETED')} disabled={saving} className="w-2/3 bg-blue-600 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-60 flex justify-center items-center gap-2 transition-colors">
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : null} Marcar Completada
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-3 flex-wrap">
+                {Object.entries(STATUS_CONFIG).map(([key, val]) => (
+                  <button
+                    key={key}
+                    disabled={order.status === key || saving}
+                    onClick={() => changeStatus(key)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                      ${order.status === key ? `${val.bg} ${val.text} ${val.border}` : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <val.icon size={14} />}
+                    {val.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -271,7 +348,7 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
   const [form, setForm] = useState({ 
     customerName: '', customerCedula: '', 
     phoneCountry: '+58', phoneArea: '414', phoneNum: '', 
-    customerEmail: '', locationAddress: '', locationMapLat: '', locationMapLng: '', status: 'PENDING' 
+    customerEmail: '', locationAddress: '', locationMapLat: '', locationMapLng: '', status: 'PENDING', paymentMethod: 'Pago Móvil (Bs)' 
   });
   const [items, setItems] = useState([]);
   const [dueDates, setDueDates] = useState([]);
@@ -334,6 +411,7 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
         locationMapLat: form.locationMapLat,
         locationMapLng: form.locationMapLng,
         status: form.status,
+        paymentMethod: form.paymentMethod,
         dueDates: form.status === 'PENDING_PAYMENT' ? dueDates.filter(d => d) : undefined,
         items: items.map(it => ({
           productId: parseInt(it.productId),
@@ -403,6 +481,16 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dirección (Texto)</label>
               <input value={form.locationAddress} onChange={e => setForm({...form, locationAddress: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none" />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Método de Pago</label>
+              <select value={form.paymentMethod} onChange={e => setForm({...form, paymentMethod: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-sm outline-none">
+                <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
+                <option value="Transferencia ($)">Transferencia ($)</option>
+                <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                <option value="Efectivo ($)">Efectivo ($)</option>
+              </select>
             </div>
 
             <div>
@@ -574,9 +662,10 @@ const Orders = ({ openNewOrder }) => {
   };
 
 
-  const handleStatusChange = async (id, status, dueDates) => {
+  const handleStatusChange = async (id, status, dueDates, paymentMethod) => {
     const payload = { status };
     if (dueDates) payload.dueDates = dueDates;
+    if (paymentMethod) payload.paymentMethod = paymentMethod;
     const res = await api.patch(`/orders/${id}/status`, payload);
     setOrders(prev => prev.map(o => o.id === id ? res.data : o));
     if (selectedOrder?.id === id) setSelectedOrder(res.data);
@@ -689,7 +778,13 @@ const Orders = ({ openNewOrder }) => {
                         <MessageCircle size={13} /> {order.customerPhone}
                       </a>
                     </td>
-                    <td className="p-4 font-bold text-gray-800">${Number(order.totalAmount).toFixed(2)}</td>
+                    <td className="p-4 font-bold text-gray-800">
+                      {order.paymentMethod && order.paymentMethod.includes('(Bs)') ? (
+                        <span>Bs. {order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2)}</span>
+                      ) : (
+                        <span>${Number(order.totalAmount).toFixed(2)}</span>
+                      )}
+                    </td>
                     <td className="p-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
                         <IconComp size={11} /> {cfg.label}

@@ -236,8 +236,15 @@ const Finances = ({ openNewExpense }) => {
   const [inventory, setInventory] = useState({ byLine: {}, byCategory: {}, byProduct: {} });
   const [activeTab, setActiveTab] = useState('RESUMEN');
   
+  const [closureDate, setClosureDate] = useState(new Date().toISOString().split('T')[0]);
+  const [closureOrders, setClosureOrders] = useState([]);
+  const [closureSummary, setClosureSummary] = useState(null);
+  const [closureHistory, setClosureHistory] = useState([]);
+  const [savingClosure, setSavingClosure] = useState(false);
+  
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [currentBcvRate, setCurrentBcvRate] = useState(1);
 
   const [loading, setLoading] = useState(true);
 
@@ -264,6 +271,50 @@ const Finances = ({ openNewExpense }) => {
       setPendingOrders(poRes.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
+  };
+
+  const fetchClosureData = async () => {
+    try {
+      const [oRes, sRes, bRes, hRes] = await Promise.all([
+        api.get(`/closure/orders?date=${closureDate}`),
+        api.get(`/closure/summary?date=${closureDate}`),
+        api.get('/bcv'),
+        api.get('/closure/history')
+      ]);
+      setClosureOrders(oRes.data);
+      setClosureSummary(sRes.data);
+      setClosureHistory(hRes.data);
+      if (bRes.data && bRes.data.valor) {
+        setCurrentBcvRate(bRes.data.valor);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'CIERRE') {
+      fetchClosureData();
+    }
+  }, [activeTab, closureDate]);
+
+  const handleSaveClosure = async () => {
+    setSavingClosure(true);
+    try {
+      const updates = closureOrders.map(o => ({
+        id: o.id,
+        totalAmount: o.totalAmount,
+        totalAmountBs: o.totalAmountBs,
+        paymentMethod: o.paymentMethod
+      }));
+      await api.put('/closure/orders', { updates });
+      alert('Cierre de caja guardado exitosamente.');
+      fetchClosureData();
+    } catch (e) {
+      alert('Error al guardar el cierre de caja');
+    } finally {
+      setSavingClosure(false);
+    }
   };
 
   const handleDeleteExpense = async (id) => {
@@ -318,10 +369,77 @@ const Finances = ({ openNewExpense }) => {
         Ganancia_Total_Esperada: Number(p.profit).toFixed(2)
       }));
       exportToCSV(dataToExport, 'inventario_esperado.csv');
+    } else if (activeTab === 'CIERRE') {
+      const dataToExport = [];
+      closureHistory.forEach(day => {
+        day.orders.forEach(o => {
+          let itemsText = o.items ? o.items.map(i => `${i.quantity}x ${i.product?.name || 'Producto'}`).join(' | ') : '';
+          dataToExport.push({
+            Fecha_Cierre: day.date,
+            ID_Orden: o.id,
+            Cliente: o.customerName || '',
+            Metodo_Pago: o.paymentMethod || '',
+            Monto_Dolares: Number(o.totalAmount || 0).toFixed(2),
+            Monto_Bs: o.totalAmountBs ? Number(o.totalAmountBs).toFixed(2) : '',
+            Tasa_BCV: o.bcvRate || '',
+            Productos: itemsText,
+            Bruto_Dia: Number(day.bruto).toFixed(2),
+            Neto_Dia: Number(day.neto).toFixed(2)
+          });
+        });
+      });
+      exportToCSV(dataToExport, 'historial_cierres_caja.csv');
     }
   };
   
-  // Removed pendingReceivables calculation
+  const dynamicSummary = React.useMemo(() => {
+    let tTransf = 0, tEfeD = 0, tPmBs = 0, tEfeBs = 0;
+    let totalCost = 0;
+    let totalBrutoDollar = 0; // Gross in Dollar across all
+
+    closureOrders.forEach(o => {
+      const pm = o.paymentMethod || '';
+      const gross = parseFloat(o.totalAmount || 0);
+      const grossBs = parseFloat(o.totalAmountBs || 0);
+
+      // The frontend uses backend totalAmount as the definitive dollar value
+      // This solves the problem that if users manually modify amount, they modify totalAmount
+      let cost = 0;
+      if (o.items) {
+        o.items.forEach(item => {
+          let cp = 0;
+          if (item.variant && item.variant.costPrice) cp = parseFloat(item.variant.costPrice);
+          else if (item.product && item.product.costPrice) cp = parseFloat(item.product.costPrice);
+          cost += cp * item.quantity;
+        });
+      }
+
+      if (pm === 'Transferencia ($)') tTransf += gross;
+      else if (pm === 'Efectivo ($)') tEfeD += gross;
+      else if (pm === 'Pago Móvil (Bs)') tPmBs += grossBs;
+      else if (pm === 'Efectivo (Bs)') tEfeBs += grossBs;
+
+      const rate = parseFloat(o.bcvRate) || currentBcvRate || 1;
+      if (pm.includes('(Bs)')) {
+        totalBrutoDollar += (grossBs / rate);
+      } else {
+        totalBrutoDollar += gross;
+      }
+      
+      totalCost += cost;
+    });
+
+    return { 
+      transf: tTransf, 
+      efeD: tEfeD, 
+      pmBs: tPmBs, 
+      efeBs: tEfeBs, 
+      totalD: tTransf + tEfeD, 
+      totalBs: tPmBs + tEfeBs, 
+      bruto: totalBrutoDollar, 
+      neto: totalBrutoDollar - totalCost 
+    };
+  }, [closureOrders]);
 
   const byCategory = {};
   for (const e of expenses) {
@@ -381,6 +499,7 @@ const Finances = ({ openNewExpense }) => {
 
       <div className="flex border-b border-gray-200 mb-6 gap-6">
         <button onClick={() => setActiveTab('RESUMEN')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'RESUMEN' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Resumen Financiero</button>
+        <button onClick={() => setActiveTab('CIERRE')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'CIERRE' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cierre de Caja Diario</button>
         <button onClick={() => setActiveTab('CUENTAS')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'CUENTAS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cuentas por Cobrar</button>
         <button onClick={() => setActiveTab('INVENTARIO')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'INVENTARIO' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Inventario Esperado</button>
       </div>
@@ -446,6 +565,190 @@ const Finances = ({ openNewExpense }) => {
         </table>
       </div>
       </>
+      )}
+
+      {activeTab === 'CIERRE' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-bold text-gray-600">Fecha del Cierre:</label>
+              <input 
+                type="date" 
+                value={closureDate} 
+                onChange={(e) => setClosureDate(e.target.value)}
+                className="bg-gray-50 border border-gray-200 p-2 rounded-lg text-sm outline-none font-medium"
+              />
+            </div>
+            <button 
+              onClick={handleSaveClosure} 
+              disabled={savingClosure}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50"
+            >
+              {savingClosure ? 'Guardando...' : 'Guardar Cierre'}
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="font-bold text-gray-800">Órdenes del Día Completadas</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-white text-gray-400 font-bold uppercase text-[10px] border-b border-gray-100">
+                  <tr>
+                    <th className="p-3">Cliente / ID</th>
+                    <th className="p-3">Monto ($)</th>
+                    <th className="p-3">Monto (Bs)</th>
+                    <th className="p-3">Método de Pago</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {closureOrders.map((o, index) => (
+                    <tr key={o.id} className="hover:bg-gray-50">
+                      <td className="p-3">
+                        <div className="font-bold">{o.customerName}</div>
+                        <div className="text-xs text-gray-500">#{o.id}</div>
+                      </td>
+                      <td className="p-3">
+                        <input 
+                          type="number" step="0.01"
+                          value={o.totalAmount}
+                          onChange={(e) => {
+                            const newOrders = [...closureOrders];
+                            newOrders[index].totalAmount = e.target.value;
+                            setClosureOrders(newOrders);
+                          }}
+                          className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <input 
+                          type="number" step="0.01"
+                          value={o.totalAmountBs || ''}
+                          onChange={(e) => {
+                            const newOrders = [...closureOrders];
+                            newOrders[index].totalAmountBs = e.target.value;
+                            setClosureOrders(newOrders);
+                          }}
+                          className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <select
+                          value={o.paymentMethod || ''}
+                          onChange={(e) => {
+                            const newOrders = [...closureOrders];
+                            newOrders[index].paymentMethod = e.target.value;
+                            setClosureOrders(newOrders);
+                          }}
+                          className="border rounded p-1 text-sm outline-none focus:border-blue-500"
+                        >
+                          <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
+                          <option value="Transferencia ($)">Transferencia ($)</option>
+                          <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                          <option value="Efectivo ($)">Efectivo ($)</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                  {closureOrders.length === 0 && (
+                    <tr><td colSpan="4" className="p-6 text-center text-gray-400">No hay órdenes completadas para esta fecha.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-xl border shadow-sm w-full lg:col-span-1 h-fit">
+              <h3 className="font-bold text-gray-800 mb-4 uppercase text-xs tracking-wider">Resumen de Caja</h3>
+              
+              <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Transferencia ($):</span>
+                  <span className="font-bold">${dynamicSummary.transf.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pago Móvil (Bs):</span>
+                  <span className="font-bold">Bs. {dynamicSummary.pmBs.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Efectivo (Bs):</span>
+                  <span className="font-bold">Bs. {dynamicSummary.efeBs.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Efectivo ($):</span>
+                  <span className="font-bold">${dynamicSummary.efeD.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
+                <div className="flex justify-between">
+                  <span className="text-gray-800 font-bold">Total $:</span>
+                  <span className="font-black text-green-700">
+                    ${dynamicSummary.totalD.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-800 font-bold">Total Bs:</span>
+                  <span className="font-black text-blue-700">
+                    Bs. {dynamicSummary.totalBs.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 font-bold uppercase text-[10px] tracking-wider">Bruto</span>
+                  <div className="text-right">
+                    <span className="font-black text-gray-800 block">${dynamicSummary.bruto.toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-200">
+                  <span className="text-gray-600 font-bold uppercase text-[10px] tracking-wider">Neto</span>
+                  <div className="text-right">
+                    <span className="font-black text-green-600 block">${dynamicSummary.neto.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border shadow-sm w-full lg:col-span-2 flex flex-col h-[400px]">
+              <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                <h3 className="font-bold text-gray-800">Historial de Cierres</h3>
+                <button onClick={handleExportCSV} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors">
+                  Exportar Todo (CSV)
+                </button>
+              </div>
+              <div className="overflow-x-auto flex-1 overflow-y-auto">
+                <table className="w-full text-left text-sm relative">
+                  <thead className="bg-white text-gray-400 font-bold uppercase text-[10px] border-b border-gray-100 sticky top-0 shadow-sm z-10">
+                    <tr>
+                      <th className="p-4">Día</th>
+                      <th className="p-4">Órdenes</th>
+                      <th className="p-4">Bruto ($)</th>
+                      <th className="p-4">Neto ($)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {closureHistory.map(h => (
+                      <tr key={h.date} className="hover:bg-gray-50">
+                        <td className="p-4 font-bold">{h.date}</td>
+                        <td className="p-4 text-gray-500">{h.orders?.length || 0}</td>
+                        <td className="p-4 font-bold text-gray-800">${Number(h.bruto).toFixed(2)}</td>
+                        <td className="p-4 font-black text-green-600">${Number(h.neto).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    {closureHistory.length === 0 && (
+                      <tr><td colSpan="4" className="p-8 text-center text-gray-400">No hay historial de cierres</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {activeTab === 'INVENTARIO' && (

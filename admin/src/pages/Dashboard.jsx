@@ -20,6 +20,7 @@ const Dashboard = () => {
   const [metrics, setMetrics] = useState({ totalOrders: 0, totalEarnings: 0, totalExpenses: 0, totalProducts: 0 });
   const [salesByLine, setSalesByLine] = useState([]);
   const [pendingOrders, setPendingOrders] = useState([]);
+  const [closureSummary, setClosureSummary] = useState(null);
   
   // Paginación para órdenes pendientes
   const [currentPage, setCurrentPage] = useState(1);
@@ -41,6 +42,11 @@ const Dashboard = () => {
         // Fallback for older backend
         setMetrics(res.data);
       }
+
+      // Fetch Vista General / Cierre
+      const today = new Date().toISOString().split('T')[0];
+      const sRes = await api.get(`/closure/summary?date=${today}`);
+      setClosureSummary(sRes.data);
     } catch (e) {
       console.error("Error fetching dashboard data:", e);
     }
@@ -105,6 +111,36 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {closureSummary && Object.keys(closureSummary).length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <DollarSign size={20} className="text-blue-600" />
+            Vista General - Cierre de Caja (Hoy)
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {Object.entries(closureSummary).map(([method, data]) => (
+              <div key={method} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <h3 className="font-bold text-gray-800 mb-3">{method}</h3>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Bruto ($):</span>
+                    <span className="font-bold">${data.gross.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Bruto (Bs):</span>
+                    <span className="font-bold">Bs. {data.grossBs.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t mt-1">
+                    <span className="text-gray-700 font-bold">Neto ($):</span>
+                    <span className="font-black text-green-600">${data.net.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* PRODUCTOS MÁS VENDIDOS POR LÍNEA */}

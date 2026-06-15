@@ -71,6 +71,9 @@ model Order {
   locationAddress    String?
   receiptImageBase64 String?     @db.Text
   totalAmount        Decimal     @db.Decimal(10, 2)
+  bcvRate            Decimal?    @db.Decimal(10, 2)
+  totalAmountBs      Decimal?    @db.Decimal(10, 2)
+  paymentMethod      String?     @default("Pago Móvil (Bs)")
   status             String      @default("PENDING")
   n8nStatus          String      @default("PENDING")
   createdAt          DateTime    @default(now())

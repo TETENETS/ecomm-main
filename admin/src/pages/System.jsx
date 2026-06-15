@@ -200,6 +200,8 @@ const System = () => {
                 <li><code>{`{{locationAddress}}`}</code> - Dirección de envío</li>
                 <li><code>{`{{orderId}}`}</code> - Número de orden</li>
                 <li><code>{`{{totalAmount}}`}</code> - Total de la orden ($)</li>
+                <li><code>{`{{totalAmountBs}}`}</code> - Total de la orden (Bs)</li>
+                <li><code>{`{{bcvRate}}`}</code> - Tasa de cambio BCV aplicada al momento de la compra</li>
                 <li><code>{`{{itemsList}}`}</code> - Lista de productos y variantes comprados (en formato HTML)</li>
                 <li><code>{`{{amount}}`}</code> - Monto a pagar (solo para Aviso de Vencimiento)</li>
                 <li><code>{`{{dueDate}}`}</code> - Fecha de vencimiento (solo para Aviso de Vencimiento)</li>

@@ -678,12 +678,27 @@ app.post('/api/checkout', async (req, res) => {
       locationMapLng,
       locationAddress,
       receiptImageBase64,
+      paymentMethod,
       items
     } = req.body;
 
     // items should be [{ productId, variantId, quantity }]
     let totalAmount = 0;
     const orderItemsData = [];
+
+    // Get current BCV rate
+    let currentBcvRate = null;
+    try {
+      const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+      if (manualBcv && manualBcv.value && parseFloat(manualBcv.value) > 0) {
+        currentBcvRate = parseFloat(manualBcv.value);
+      } else {
+        const info = bcvService.obtenerInfo();
+        if (info && info.valor) currentBcvRate = info.valor;
+      }
+    } catch (e) {
+      console.error('Error fetching BCV rate for checkout:', e);
+    }
 
     for (const item of items) {
       const product = await prisma.product.findUnique({ 
@@ -714,12 +729,16 @@ app.post('/api/checkout', async (req, res) => {
       }
       
       if (newStock < 3) {
-        const pName = variant ? `${product.name} - ${variant.name}` : product.name;
-        await sendAlert('LOW_STOCK', `Alerta, Producto bajo en stock quedan menos de 3 unidades: ${pName}`, {
-          productId: product.id,
-          productName: pName,
-          remaining: newStock
-        });
+        try {
+          const pName = variant ? `${product.name} - ${variant.name}` : product.name;
+          await sendAlert('LOW_STOCK', `Alerta, Producto bajo en stock quedan menos de 3 unidades: ${pName}`, {
+            productId: product.id,
+            productName: pName,
+            remaining: newStock
+          });
+        } catch (e) {
+          console.error("Error sending LOW_STOCK alert:", e);
+        }
       }
 
       orderItemsData.push({
@@ -740,7 +759,10 @@ app.post('/api/checkout', async (req, res) => {
         locationMapLng: locationMapLng !== undefined && locationMapLng !== null ? String(locationMapLng) : null,
         locationAddress,
         receiptImageBase64, // Guardar comprobante base64
+        paymentMethod: paymentMethod || "Pago Móvil (Bs)",
         totalAmount,
+        bcvRate: currentBcvRate,
+        totalAmountBs: currentBcvRate ? parseFloat((totalAmount * currentBcvRate).toFixed(2)) : null,
         items: {
           create: orderItemsData
         }
@@ -762,7 +784,7 @@ app.post('/api/checkout', async (req, res) => {
       locationAddress: locationAddress,
       locationMapLat: locationMapLat,
       locationMapLng: locationMapLng,
-      totalAmount: totalAmount,
+      totalAmount: (paymentMethod && paymentMethod.includes('(Bs)')) ? `Bs. ${currentBcvRate ? (totalAmount * currentBcvRate).toFixed(2) : 'N/A'}` : `$${Number(totalAmount).toFixed(2)}`,
       link: orderLink,
       items: order.items.map(i => ({
         productName: i.product?.name,
@@ -785,7 +807,7 @@ app.post('/api/checkout', async (req, res) => {
             <h2>Nueva Orden Recibida</h2>
             <p><b>Cliente:</b> ${customerName}</p>
             <p><b>Teléfono:</b> ${customerPhone}</p>
-            <p><b>Total:</b> $${Number(totalAmount).toFixed(2)}</p>
+            <p><b>Total:</b> ${(paymentMethod && paymentMethod.includes('(Bs)')) ? 'Bs. ' + (currentBcvRate ? (totalAmount * currentBcvRate).toFixed(2) : 'N/A') : '$' + Number(totalAmount).toFixed(2)}</p>
             <a href="${orderLink}">Ver detalles en el panel</a>
           `);
         }
@@ -804,13 +826,15 @@ app.post('/api/checkout', async (req, res) => {
             .replace(/\{\{customerPhone\}\}/g, customerPhone || '')
             .replace(/\{\{locationAddress\}\}/g, locationAddress || 'N/A')
             .replace(/\{\{orderId\}\}/g, order.id)
-            .replace(/\{\{totalAmount\}\}/g, Number(totalAmount).toFixed(2))
+            .replace(/\$?\s*\{\{totalAmount\}\}/g, (paymentMethod && paymentMethod.includes('(Bs)')) ? `Bs. ${currentBcvRate ? (totalAmount * currentBcvRate).toFixed(2) : 'N/A'}` : `$${Number(totalAmount).toFixed(2)}`)
+            .replace(/\{\{totalAmountBs\}\}/g, order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : '')
+            .replace(/\{\{bcvRate\}\}/g, order.bcvRate ? Number(order.bcvRate).toFixed(2) : '')
             .replace(/\{\{itemsList\}\}/g, itemsListHtml);
         } else {
           emailHtml = `
             <h1>¡Gracias por tu pedido, ${customerName}!</h1>
             <p>Hemos recibido tu pedido correctamente. Tu número de orden es <b>#${order.id}</b>.</p>
-            <p>Total a pagar: <b>$${Number(totalAmount).toFixed(2)}</b></p>
+            <p>Total a pagar: <b>${(paymentMethod && paymentMethod.includes('(Bs)')) ? 'Bs. ' + (currentBcvRate ? (totalAmount * currentBcvRate).toFixed(2) : 'N/A') : '$' + Number(totalAmount).toFixed(2)}</b></p>
             <p>Nos pondremos en contacto contigo a la brevedad para coordinar la entrega y/o pago.</p>
           `;
         }
@@ -832,7 +856,7 @@ app.post('/api/checkout', async (req, res) => {
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
     const { status } = req.query;
-    const where = status && status !== 'ALL' ? { status } : {};
+    const where = status && status !== 'ALL' ? { status } : { status: { not: 'COMPLETED' } };
     const orders = await prisma.order.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -853,9 +877,18 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
 app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, dueDates } = req.body;
+    const { status, dueDates, paymentMethod } = req.body;
     
+    const oldOrder = await prisma.order.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!oldOrder) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
     const updateData = { status };
+    if (paymentMethod) updateData.paymentMethod = paymentMethod;
 
     if (status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates)) {
       // Create due dates
@@ -870,6 +903,40 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
       data: updateData,
       include: { items: { include: { product: true, variant: true } }, dueDates: true }
     });
+
+    // Stock management
+    if (oldOrder.status !== 'CANCELED' && status === 'CANCELED') {
+      // Re-stock
+      for (const item of order.items) {
+        if (item.productVariantId) {
+          await prisma.productVariant.update({
+            where: { id: item.productVariantId },
+            data: { stock: { increment: item.quantity } }
+          });
+        } else {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } }
+          });
+        }
+      }
+    } else if (oldOrder.status === 'CANCELED' && status !== 'CANCELED') {
+      // De-stock
+      for (const item of order.items) {
+        if (item.productVariantId) {
+          // ensure it doesn't go below 0 if somehow that happens, but decrement is fine
+          await prisma.productVariant.update({
+            where: { id: item.productVariantId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        } else {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        }
+      }
+    }
 
     if (status === 'PAID' && order.customerEmail) {
       const allSettings = await prisma.setting.findMany();
@@ -887,7 +954,7 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
           .replace(/\{\{customerPhone\}\}/g, order.customerPhone || '')
           .replace(/\{\{locationAddress\}\}/g, order.locationAddress || 'N/A')
           .replace(/\{\{orderId\}\}/g, order.id)
-          .replace(/\{\{totalAmount\}\}/g, Number(order.totalAmount).toFixed(2))
+          .replace(/\$?\s*\{\{totalAmount\}\}/g, (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? `Bs. ${order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : 'N/A'}` : `$${Number(order.totalAmount).toFixed(2)}`)
           .replace(/\{\{itemsList\}\}/g, itemsListHtml);
         
         const { sendEmail } = require('./mailer');
@@ -906,11 +973,25 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
   try {
     const {
       customerName, customerCedula, customerPhone, customerEmail,
-      locationAddress, items, notes, status, dueDates
+      locationAddress, paymentMethod, items, notes, status, dueDates
     } = req.body;
 
     let totalAmount = 0;
     const orderItemsData = [];
+
+    // Get current BCV rate
+    let currentBcvRate = null;
+    try {
+      const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+      if (manualBcv && manualBcv.value && parseFloat(manualBcv.value) > 0) {
+        currentBcvRate = parseFloat(manualBcv.value);
+      } else {
+        const info = bcvService.obtenerInfo();
+        if (info && info.valor) currentBcvRate = info.valor;
+      }
+    } catch (e) {
+      console.error('Error fetching BCV rate for checkout:', e);
+    }
 
     for (const item of items) {
       const product = await prisma.product.findUnique({
@@ -958,7 +1039,10 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
         customerName, customerCedula, customerPhone,
         customerEmail: customerEmail || null,
         locationAddress: locationAddress || null,
+        paymentMethod: paymentMethod || "Pago Móvil (Bs)",
         totalAmount,
+        bcvRate: currentBcvRate,
+        totalAmountBs: currentBcvRate ? parseFloat((totalAmount * currentBcvRate).toFixed(2)) : null,
         status: status || 'PENDING',
         items: { create: orderItemsData },
         ...(status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates) ? {
@@ -981,7 +1065,7 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
       locationAddress: locationAddress || null,
       locationMapLat: null,
       locationMapLng: null,
-      totalAmount: totalAmount,
+      totalAmount: (paymentMethod && paymentMethod.includes('(Bs)')) ? `Bs. ${currentBcvRate ? (totalAmount * currentBcvRate).toFixed(2) : 'N/A'}` : `$${Number(totalAmount).toFixed(2)}`,
       link: orderLink,
       items: order.items.map(i => ({
         productName: i.product?.name,
@@ -995,6 +1079,157 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error creating order' });
+  }
+});
+
+// --- CIERRE DE CAJA ---
+
+// GET /api/closure/orders
+app.get('/api/closure/orders', authMiddleware, async (req, res) => {
+  try {
+    const { date } = req.query; // YYYY-MM-DD
+    let start, end;
+    if (date) {
+      start = new Date(`${date}T00:00:00.000Z`);
+      end = new Date(`${date}T23:59:59.999Z`);
+    } else {
+      const today = new Date();
+      start = new Date(today.setHours(0,0,0,0));
+      end = new Date(today.setHours(23,59,59,999));
+    }
+    const orders = await prisma.order.findMany({
+      where: {
+        status: 'COMPLETED',
+        createdAt: { gte: start, lte: end }
+      },
+      include: { items: { include: { product: true, variant: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(orders);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error fetching closure orders' });
+  }
+});
+
+// PUT /api/closure/orders
+app.put('/api/closure/orders', authMiddleware, async (req, res) => {
+  try {
+    const { updates } = req.body; // [{ id, totalAmount, totalAmountBs, paymentMethod }]
+    for (const u of updates) {
+      await prisma.order.update({
+        where: { id: u.id },
+        data: {
+          totalAmount: parseFloat(u.totalAmount),
+          totalAmountBs: u.totalAmountBs ? parseFloat(u.totalAmountBs) : null,
+          paymentMethod: u.paymentMethod
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error updating closure orders' });
+  }
+});
+
+// GET /api/closure/summary
+app.get('/api/closure/summary', authMiddleware, async (req, res) => {
+  try {
+    const { date } = req.query;
+    let start, end;
+    if (date) {
+      start = new Date(`${date}T00:00:00.000Z`);
+      end = new Date(`${date}T23:59:59.999Z`);
+    } else {
+      const today = new Date();
+      start = new Date(today.setHours(0,0,0,0));
+      end = new Date(today.setHours(23,59,59,999));
+    }
+
+    const orders = await prisma.order.findMany({
+      where: {
+        status: 'COMPLETED',
+        createdAt: { gte: start, lte: end }
+      },
+      include: { items: { include: { product: true, variant: true } } }
+    });
+
+    const summary = {};
+    for (const o of orders) {
+      const pm = o.paymentMethod || 'No especificado';
+      if (!summary[pm]) summary[pm] = { gross: 0, net: 0, grossBs: 0 };
+      
+      const gross = parseFloat(o.totalAmount || 0);
+      const grossBs = parseFloat(o.totalAmountBs || 0);
+      
+      let cost = 0;
+      for (const item of o.items) {
+        let cp = 0;
+        if (item.variant && item.variant.costPrice) cp = parseFloat(item.variant.costPrice);
+        else if (item.product && item.product.costPrice) cp = parseFloat(item.product.costPrice);
+        cost += cp * item.quantity;
+      }
+      
+      summary[pm].gross += gross;
+      summary[pm].net += (gross - cost);
+      summary[pm].grossBs += grossBs;
+    }
+
+    res.json(summary);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error calculating closure summary' });
+  }
+});
+
+// GET /api/closure/history
+app.get('/api/closure/history', authMiddleware, async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { status: 'COMPLETED' },
+      include: { items: { include: { product: true, variant: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const historyMap = {};
+
+    for (const o of orders) {
+      const dateStr = new Date(o.createdAt).toISOString().split('T')[0];
+      if (!historyMap[dateStr]) {
+        historyMap[dateStr] = { date: dateStr, orders: [], bruto: 0, neto: 0, totalCost: 0 };
+      }
+      historyMap[dateStr].orders.push(o);
+
+      const pm = o.paymentMethod || '';
+      const gross = parseFloat(o.totalAmount || 0);
+      const grossBs = parseFloat(o.totalAmountBs || 0);
+      const rate = parseFloat(o.bcvRate) || 1; // Backend doesn't know the exact current fallback easily here unless fetched, but we use what we have saved
+
+      let cost = 0;
+      for (const item of o.items) {
+        let cp = 0;
+        if (item.variant && item.variant.costPrice) cp = parseFloat(item.variant.costPrice);
+        else if (item.product && item.product.costPrice) cp = parseFloat(item.product.costPrice);
+        cost += cp * item.quantity;
+      }
+
+      let orderBrutoDollar = gross;
+      if (pm.includes('(Bs)')) {
+        orderBrutoDollar = grossBs / rate;
+      }
+      
+      historyMap[dateStr].bruto += orderBrutoDollar;
+      historyMap[dateStr].totalCost += cost;
+      historyMap[dateStr].neto += (orderBrutoDollar - cost);
+    }
+
+    const historyList = Object.values(historyMap).sort((a, b) => new Date(b.date) - new Date(a.date));
+    res.json(historyList);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error fetching closure history' });
   }
 });
 
@@ -1016,8 +1251,11 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
   try {
     const totalOrders = await prisma.order.count();
     
-    const orders = await prisma.order.findMany();
-    const totalEarnings = orders.reduce((acc, order) => acc + Number(order.totalAmount), 0);
+    // Only count completed orders for earnings
+    const completedOrders = await prisma.order.findMany({
+      where: { status: 'COMPLETED' }
+    });
+    const totalEarnings = completedOrders.reduce((acc, order) => acc + Number(order.totalAmount), 0);
     
     const expenses = await prisma.expense.findMany();
     const totalExpenses = expenses.reduce((acc, exp) => acc + Number(exp.amount), 0);
@@ -1026,7 +1264,12 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 
     // Sales by Product Line & Top Products grouped
     const products = await prisma.product.findMany({
-      include: { orderItems: true, productLine: true }
+      include: { 
+        orderItems: {
+          where: { order: { status: 'COMPLETED' } }
+        }, 
+        productLine: true 
+      }
     });
     
     const salesByLineMap = {};
