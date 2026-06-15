@@ -18,8 +18,8 @@ const generateEmailTemplate = (alertType, message, data, settingsMap = {}) => {
       .replace(/\{\{stock\}\}/g, data.stock !== undefined ? data.stock : (data.remaining !== undefined ? data.remaining : 'N/A'))
       .replace(/\{\{orderId\}\}/g, data.orderId || data.id || 'N/A')
       .replace(/\{\{customerName\}\}/g, data.customerName || 'N/A')
-      .replace(/\{\{total\}\}/g, data.total || data.amount || '0.00')
-      .replace(/\{\{amount\}\}/g, data.amount || data.total || '0.00')
+      .replace(/\{\{total\}\}/g, data.total || data.amount || data.totalAmount || '0.00')
+      .replace(/\{\{amount\}\}/g, data.amount || data.total || data.totalAmount || '0.00')
       .replace(/\{\{dueDate\}\}/g, data.dueDate ? new Date(data.dueDate).toLocaleDateString() : 'N/A');
   };
 
@@ -43,7 +43,7 @@ const generateEmailTemplate = (alertType, message, data, settingsMap = {}) => {
         <ul>
           <li><strong>Orden ID:</strong> #${data.orderId || data.id || 'N/A'}</li>
           <li><strong>Cliente:</strong> ${data.customerName || 'N/A'}</li>
-          <li><strong>Total:</strong> $${data.total || data.amount || '0.00'}</li>
+          <li><strong>Total:</strong> ${data.totalAmount || ('$' + (data.total || data.amount || '0.00'))}</li>
         </ul>
       `);
       break;

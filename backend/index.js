@@ -799,19 +799,7 @@ app.post('/api/checkout', async (req, res) => {
     allSettings.forEach(s => settingsMap[s.key] = s.value);
 
     try {
-      // Enviar correos a los administradores
-      if (settingsMap.alert_emails) {
-        const emails = settingsMap.alert_emails.split(',').map(e => e.trim()).filter(e => e);
-        for (const email of emails) {
-          await sendEmail(email, `NUEVA ORDEN RECIBIDA: #${order.id} - ${customerName}`, `
-            <h2>Nueva Orden Recibida</h2>
-            <p><b>Cliente:</b> ${customerName}</p>
-            <p><b>Teléfono:</b> ${customerPhone}</p>
-            <p><b>Total:</b> ${(paymentMethod && paymentMethod.includes('(Bs)')) ? 'Bs. ' + (currentBcvRate ? (totalAmount * currentBcvRate).toFixed(2) : 'N/A') : '$' + Number(totalAmount).toFixed(2)}</p>
-            <a href="${orderLink}">Ver detalles en el panel</a>
-          `);
-        }
-      }
+      // (El correo a los administradores ya se envió arriba mediante sendAlert('NEW_ORDER'))
 
       if (customerEmail) {
         let emailHtml = '';
