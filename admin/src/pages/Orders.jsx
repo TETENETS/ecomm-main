@@ -32,7 +32,7 @@ const STATUS_CONFIG = {
 const getImageUrl = (url) => {
   if (!url) return '/placeholder.png';
   if (url.startsWith('http')) return url;
-  return import.meta.env.DEV ? `http://localhost:3001${url}` : `${import.meta.env.VITE_BACKEND_URL || ''}${url}`;
+  return import.meta.env.DEV ? `http://localhost:3001${url}` : `${(import.meta.env.VITE_API_URL || '').replace('/api', '')}${url}`;
 };
 
 const LocationSelector = ({ lat, lng, onChange }) => {
