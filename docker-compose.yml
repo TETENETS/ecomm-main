@@ -19,7 +19,7 @@ services:
     depends_on:
       - db
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-ecomm_user}:${POSTGRES_PASSWORD:-ecomm_password}@db:5432/${POSTGRES_DB:-ecomm_db}?schema=public
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-ecomm_user}:${POSTGRES_PASSWORD:-ecomm_password}@db:5432/${POSTGRES_DB:-ecomm_db}?schema=public}
       - PORT=3001
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
