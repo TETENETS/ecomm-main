@@ -246,6 +246,48 @@ const System = () => {
               <textarea value={settings.template_payment_validated || ''} onChange={e => setSettings({...settings, template_payment_validated: e.target.value})} className="w-full h-32 bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm font-mono text-gray-700" placeholder="Código HTML..."></textarea>
             </div>
 
+            <div className="pt-6 border-t border-gray-100">
+              <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
+                <LayoutTemplate size={18} className="text-orange-500" /> Plantillas de Alertas del Sistema (Administrador)
+              </h2>
+              <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl text-sm text-orange-800 mb-6">
+                <p className="font-bold mb-2">Variables disponibles para alertas:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li><code>{`{{alertMessage}}`}</code> - Mensaje de la alerta enviado por el sistema</li>
+                  <li><code>{`{{productName}}`}</code> - Nombre del producto (Solo Stock)</li>
+                  <li><code>{`{{stock}}`}</code> - Cantidad de stock (Solo Stock)</li>
+                  <li><code>{`{{orderId}}`}</code> - Número de orden (Solo Órdenes)</li>
+                  <li><code>{`{{customerName}}`}</code> - Nombre del cliente</li>
+                  <li><code>{`{{total}}`}</code> o <code>{`{{amount}}`}</code> - Monto</li>
+                  <li><code>{`{{dueDate}}`}</code> - Fecha de vencimiento (Solo Cobros)</li>
+                </ul>
+              </div>
+
+              {/* Template Admin: Stock Bajo */}
+              <div className="border border-gray-200 rounded-xl p-4 mb-4">
+                <h3 className="font-bold text-gray-800 mb-3">Alerta de Stock Bajo</h3>
+                <textarea value={settings.template_admin_low_stock || ''} onChange={e => setSettings({...settings, template_admin_low_stock: e.target.value})} className="w-full h-32 bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm font-mono text-gray-700" placeholder="Deja vacío para usar la plantilla por defecto. Código HTML..."></textarea>
+              </div>
+
+              {/* Template Admin: Nueva Orden */}
+              <div className="border border-gray-200 rounded-xl p-4 mb-4">
+                <h3 className="font-bold text-gray-800 mb-3">Alerta de Nueva Orden Recibida</h3>
+                <textarea value={settings.template_admin_new_order || ''} onChange={e => setSettings({...settings, template_admin_new_order: e.target.value})} className="w-full h-32 bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm font-mono text-gray-700" placeholder="Deja vacío para usar la plantilla por defecto. Código HTML..."></textarea>
+              </div>
+
+              {/* Template Admin: Vencimiento Próximo */}
+              <div className="border border-gray-200 rounded-xl p-4 mb-4">
+                <h3 className="font-bold text-gray-800 mb-3">Alerta de Vencimiento Próximo</h3>
+                <textarea value={settings.template_admin_due_soon || ''} onChange={e => setSettings({...settings, template_admin_due_soon: e.target.value})} className="w-full h-32 bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm font-mono text-gray-700" placeholder="Deja vacío para usar la plantilla por defecto. Código HTML..."></textarea>
+              </div>
+
+              {/* Template Admin: Vencimiento Hoy */}
+              <div className="border border-gray-200 rounded-xl p-4 mb-4">
+                <h3 className="font-bold text-gray-800 mb-3">Alerta de Vencimiento de Pago HOY</h3>
+                <textarea value={settings.template_admin_due_today || ''} onChange={e => setSettings({...settings, template_admin_due_today: e.target.value})} className="w-full h-32 bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm font-mono text-gray-700" placeholder="Deja vacío para usar la plantilla por defecto. Código HTML..."></textarea>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
