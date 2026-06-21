@@ -436,10 +436,10 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto md:overflow-hidden flex flex-col md:flex-row" onClick={e => e.stopPropagation()}>
         
         {/* Panel Izquierdo: Formulario */}
-        <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-gray-100 flex flex-col max-h-[90vh]">
+        <div className="w-full md:w-1/2 p-6 h-auto md:max-h-[90vh] md:overflow-y-auto border-b md:border-b-0 md:border-r border-gray-100 flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Plus size={20} className="text-blue-600" /> Nuevo Pedido</h2>
             <button onClick={onClose} className="md:hidden p-2 hover:bg-gray-100 rounded-xl"><X size={20} /></button>
@@ -567,10 +567,10 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
         </div>
 
         {/* Panel Derecho: Buscador de Productos */}
-        <div className="hidden md:flex w-1/2 bg-gray-50 flex-col p-6 max-h-[90vh]">
+        <div className="flex w-full md:w-1/2 bg-gray-50 flex-col p-6 h-auto md:max-h-[90vh]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-black text-gray-800">Catálogo</h3>
-            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-xl"><X size={20} className="text-gray-500" /></button>
+            <button onClick={onClose} className="hidden md:block p-2 hover:bg-gray-200 rounded-xl"><X size={20} className="text-gray-500" /></button>
           </div>
 
           <div className="space-y-3 mb-4 flex-shrink-0">

@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronRight, Archive, Loader2, Folder, X } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronRight, Archive, Loader2, Folder, X, Search } from 'lucide-react';
+
+const getImageUrl = (url) => {
+  if (!url) return '/placeholder.png';
+  if (url.startsWith('http')) return url;
+  return import.meta.env.DEV ? `http://localhost:3001${url}` : `${(import.meta.env.VITE_API_URL || '').replace('/api', '')}${url}`;
+};
 
 import api from '../api';
 
@@ -42,6 +48,11 @@ const Inventory = () => {
   const [lineDescription, setLineDescription] = useState('');
   const [lineImage, setLineImage] = useState(null);
   const [editingLineId, setEditingLineId] = useState(null);
+
+  // Stock Catalog Search State
+  const [stockSearch, setStockSearch] = useState('');
+  const [stockFilterCat, setStockFilterCat] = useState('');
+  const [stockFilterLine, setStockFilterLine] = useState('');
 
   // Category Form State
   const [categoryName, setCategoryName] = useState('');
@@ -291,6 +302,14 @@ const Inventory = () => {
     return s - c;
   };
 
+  // Filter products for stock catalog
+  const stockFilteredProducts = products.filter(p => {
+    if (stockFilterCat && p.category?.name !== stockFilterCat) return false;
+    if (stockFilterLine && p.productLine?.name !== stockFilterLine) return false;
+    if (stockSearch && !p.name.toLowerCase().includes(stockSearch.toLowerCase())) return false;
+    return true;
+  });
+
   // Group products by line for the UI
   const groupedProducts = productLines.map(line => ({
     ...line,
@@ -424,44 +443,108 @@ const Inventory = () => {
       {/* --- MODAL AÑADIR STOCK --- */}
       {showStockModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowStockModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h3 className="font-bold text-lg text-gray-800">Añadir Stock</h3>
-              <button onClick={() => setShowStockModal(false)} className="p-2 hover:bg-gray-100 rounded-xl"><X size={18} className="text-gray-400" /></button>
-            </div>
-            <form onSubmit={handleSaveStock} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Producto *</label>
-                <select required value={stockProductId} onChange={e => { setStockProductId(e.target.value); setStockVariantId(''); }} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
-                  <option value="">-- Seleccionar Producto --</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            {/* Panel Izquierdo: Formulario de Stock */}
+            <div className="w-full md:w-1/2 p-6 h-auto md:max-h-[90vh] md:overflow-y-auto border-b md:border-b-0 md:border-r border-gray-100 flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-black text-gray-800">Añadir Stock</h2>
+                <button onClick={() => setShowStockModal(false)} className="md:hidden p-2 hover:bg-gray-100 rounded-xl"><X size={20} className="text-gray-500" /></button>
               </div>
-              {stockProductId && products.find(p => p.id === parseInt(stockProductId))?.variants?.length > 0 && (
+              <form id="stockForm" onSubmit={handleSaveStock} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Variante *</label>
-                  <select required value={stockVariantId} onChange={e => setStockVariantId(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
-                    <option value="">-- Seleccionar Variante --</option>
-                    {products.find(p => p.id === parseInt(stockProductId)).variants.map(v => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
+                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Producto Seleccionado</h3>
+                  {!stockProductId ? (
+                     <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-3">
+                       <Search className="text-blue-400" size={20} />
+                       <p className="text-sm text-blue-700 font-medium">Selecciona un producto del catálogo (panel derecho).</p>
+                     </div>
+                  ) : (
+                     <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                       <img src={getImageUrl(products.find(p => p.id === stockProductId)?.imageUrl)} className="w-12 h-12 rounded-lg object-cover bg-white" alt="" />
+                       <div className="flex-1">
+                         <p className="text-sm font-bold text-gray-800">{products.find(p => p.id === stockProductId)?.name}</p>
+                         {stockVariantId && <p className="text-xs text-blue-600 font-bold">{products.find(p => p.id === stockProductId)?.variants?.find(v => v.id === stockVariantId)?.name}</p>}
+                       </div>
+                       <button type="button" onClick={() => {setStockProductId(''); setStockVariantId('');}} className="text-red-400 hover:text-red-600 p-2"><X size={16} /></button>
+                     </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-6">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad *</label>
+                    <input type="number" required min="1" value={stockQuantity} onChange={e => setStockQuantity(e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl outline-none" placeholder="0" disabled={!stockProductId} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio Compra Unit. *</label>
+                    <input type="number" step="0.01" required min="0" value={stockPurchasePrice} onChange={e => setStockPurchasePrice(e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl outline-none" placeholder="0.00" disabled={!stockProductId} />
+                  </div>
+                </div>
+              </form>
+
+              <div className="mt-6 pt-4 border-t border-gray-100 flex gap-3">
+                <button type="button" onClick={() => setShowStockModal(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold flex-1">Cancelar</button>
+                <button form="stockForm" type="submit" disabled={saving || !stockProductId} className="bg-green-600 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-green-700 disabled:opacity-60 flex-1 flex justify-center items-center">
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : 'Guardar Stock'}
+                </button>
+              </div>
+            </div>
+
+            {/* Panel Derecho: Buscador de Productos (Catálogo) */}
+            <div className="flex w-full md:w-1/2 bg-gray-50 flex-col p-6 h-auto md:max-h-[90vh]">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-black text-gray-800">Catálogo</h3>
+                <button onClick={() => setShowStockModal(false)} className="hidden md:block p-2 hover:bg-gray-200 rounded-xl"><X size={20} className="text-gray-500" /></button>
+              </div>
+
+              <div className="space-y-3 mb-4 flex-shrink-0">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 text-gray-400" size={16} />
+                  <input type="text" placeholder="Buscar producto..." value={stockSearch} onChange={e => setStockSearch(e.target.value)} className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm outline-none bg-white" />
+                </div>
+                <div className="flex gap-2">
+                  <select value={stockFilterCat} onChange={e => setStockFilterCat(e.target.value)} className="flex-1 bg-white border border-gray-200 p-2 rounded-xl text-xs outline-none">
+                    <option value="">Todas las Categorías</option>
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                  <select value={stockFilterLine} onChange={e => setStockFilterLine(e.target.value)} className="flex-1 bg-white border border-gray-200 p-2 rounded-xl text-xs outline-none">
+                    <option value="">Todas las Líneas</option>
+                    {productLines.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
                   </select>
                 </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad *</label>
-                  <input type="number" required min="1" value={stockQuantity} onChange={e => setStockQuantity(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" placeholder="0" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio de Compra *</label>
-                  <input type="number" step="0.01" required min="0" value={stockPurchasePrice} onChange={e => setStockPurchasePrice(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" placeholder="0.00" />
-                </div>
               </div>
-              <div className="flex justify-end pt-2">
-                <button type="submit" disabled={saving} className="bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-2.5 rounded-xl flex items-center gap-2">{saving && <Loader2 size={15} className="animate-spin" />} Guardar Stock</button>
+
+              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                {stockFilteredProducts.map(p => (
+                  <div key={p.id} className="bg-white border border-gray-200 rounded-xl p-3 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <img src={getImageUrl(p.imageUrl)} className="w-12 h-12 rounded-xl object-cover bg-gray-100" alt="" />
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-800 text-sm">{p.name}</p>
+                        <p className="text-[10px] text-gray-500">{p.category?.name || 'Sin Categoría'} • {p.productLine?.name || 'Sin Línea'}</p>
+                      </div>
+                      {!p.variants?.length ? (
+                        <button type="button" onClick={() => { setStockProductId(p.id); setStockVariantId(''); }} className="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 shrink-0 shadow-sm"><Plus size={16} /></button>
+                      ) : null}
+                    </div>
+                    {p.variants?.length > 0 && (
+                      <div className="pl-14 space-y-1">
+                        {p.variants.map(v => (
+                          <div key={v.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                            <span className="text-xs font-semibold text-gray-700">{v.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500">Stock actual: {v.stock}</span>
+                              <button type="button" onClick={() => { setStockProductId(p.id); setStockVariantId(v.id); }} className="bg-green-100 text-green-700 p-1.5 rounded hover:bg-green-200 shadow-sm"><Plus size={14} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {stockFilteredProducts.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No hay productos disponibles.</p>}
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
