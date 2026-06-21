@@ -228,6 +228,9 @@ function initMapLogic() {
     btnBloquear.addEventListener('click', () => {
         if(!map) return;
         mapaBloqueado = true;
+        const center = map.getCenter();
+        latInput.value = center.lat.toFixed(6);
+        lngInput.value = center.lng.toFixed(6);
         map.dragging.disable(); map.touchZoom.disable(); map.doubleClickZoom.disable();
         map.scrollWheelZoom.disable(); map.boxZoom.disable(); map.keyboard.disable();
         document.getElementById('contenedor-mapa').classList.add('mapa-bloqueado');
@@ -265,14 +268,18 @@ function initMapLogic() {
         btnSubmit.innerHTML = 'Procesando...';
 
         try {
+            const finalCenter = map ? map.getCenter() : null;
+            const finalLat = finalCenter ? parseFloat(finalCenter.lat.toFixed(6)) : parseFloat(latInput.value);
+            const finalLng = finalCenter ? parseFloat(finalCenter.lng.toFixed(6)) : parseFloat(lngInput.value);
+
             const payload = {
                 customerName: document.getElementById('customerName').value,
                 customerPhone: `${document.getElementById('phoneCountry').value.replace(/\D/g, '')}${document.getElementById('phoneArea').value.replace(/\D/g, '')}${document.getElementById('phoneNum').value.replace(/\D/g, '')}`,
                 customerEmail: document.getElementById('customerEmail').value,
                 paymentMethod: document.getElementById('paymentMethod').value,
                 locationAddress: document.getElementById('locationAddress').value,
-                locationMapLat: parseFloat(latInput.value),
-                locationMapLng: parseFloat(lngInput.value),
+                locationMapLat: finalLat,
+                locationMapLng: finalLng,
                 items: cart.map(i => ({ productId: i.productId, variantId: i.variantId, quantity: i.quantity, price: i.price }))
             };
 

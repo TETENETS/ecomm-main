@@ -147,7 +147,7 @@ const Dashboard = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 lg:col-span-2">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-800">Ventas y Top Productos por Línea</h2>
-            <button className="text-sm font-semibold text-blue-600 hover:text-blue-800">Ver todo</button>
+            <button onClick={() => navigate('/finances', { state: { tab: 'HISTORIAL_CIERRES' } })} className="text-sm font-semibold text-blue-600 hover:text-blue-800">Ver todo</button>
           </div>
           <div className="p-0">
             {salesByLine.length === 0 ? (

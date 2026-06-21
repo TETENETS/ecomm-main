@@ -226,6 +226,50 @@ const AccountModal = ({ onClose, onCreated }) => {
   );
 };
 
+// ── Modal: Finance Account ───────────────────────────────────────────
+const FinanceAccountModal = ({ onClose, onCreated }) => {
+  const [form, setForm] = useState({ name: '', currency: 'Bs' });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post('/finance-accounts', form);
+      onCreated();
+      onClose();
+    } catch { alert('Error al crear cuenta'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+            <Briefcase size={20} className="text-blue-500" /> Nueva Cuenta Bancaria
+          </h2>
+          <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre de la Cuenta *</label>
+            <input required value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" placeholder="Ej: Banesco, Zelle, Pago Móvil..." />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Moneda *</label>
+            <select value={form.currency} onChange={e => setForm({...form, currency: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
+              <option value="Bs">Bolívares (Bs)</option>
+              <option value="$">Dólares ($)</option>
+            </select>
+          </div>
+          <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700">{saving ? 'Guardando...' : 'Crear Cuenta'}</button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // ── Page principal ────────────────────────────────────────────────
 const Finances = ({ openNewExpense }) => {
   const location = useLocation();
@@ -234,7 +278,17 @@ const Finances = ({ openNewExpense }) => {
   const [orders, setOrders] = useState([]);
   const [pendingOrders, setPendingOrders] = useState([]);
   const [inventory, setInventory] = useState({ byLine: {}, byCategory: {}, byProduct: {} });
+  const [financeAccounts, setFinanceAccounts] = useState([]);
   const [activeTab, setActiveTab] = useState('RESUMEN');
+  
+  const [cierreCurrencyTab, setCierreCurrencyTab] = useState('$');
+  const [cierreSubTab, setCierreSubTab] = useState('DIARIO');
+
+  const [historyFilterDate, setHistoryFilterDate] = useState('');
+  const [historyFilterProduct, setHistoryFilterProduct] = useState('');
+  const [historyFilterLine, setHistoryFilterLine] = useState('');
+  const [expandedHistoryDate, setExpandedHistoryDate] = useState(null);
+
   
   const [closureDate, setClosureDate] = useState(new Date().toISOString().split('T')[0]);
   const [closureOrders, setClosureOrders] = useState([]);
@@ -244,6 +298,7 @@ const Finances = ({ openNewExpense }) => {
   
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showFinanceAccountModal, setShowFinanceAccountModal] = useState(false);
   const [currentBcvRate, setCurrentBcvRate] = useState(1);
 
   const [loading, setLoading] = useState(true);
@@ -252,23 +307,26 @@ const Finances = ({ openNewExpense }) => {
 
   useEffect(() => {
     if (location.state?.newExpense || openNewExpense) setShowTransactionModal(true);
+    if (location.state?.tab) setActiveTab(location.state.tab);
   }, [location.state, openNewExpense]);
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [eRes, cRes, oRes, iRes, poRes] = await Promise.all([
+      const [eRes, cRes, oRes, iRes, poRes, faRes] = await Promise.all([
         api.get('/expenses'),
         api.get('/finance-categories'),
         api.get('/orders?status=COMPLETED'),
         api.get('/finances/inventory'),
-        api.get('/orders?status=PENDING_PAYMENT')
+        api.get('/orders?status=PENDING_PAYMENT'),
+        api.get('/finance-accounts')
       ]);
       setExpenses(eRes.data);
       setCategories(cRes.data);
       setOrders(oRes.data);
       setInventory(iRes.data);
       setPendingOrders(poRes.data);
+      setFinanceAccounts(faRes.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -441,6 +499,28 @@ const Finances = ({ openNewExpense }) => {
     };
   }, [closureOrders]);
 
+  const filteredHistory = React.useMemo(() => {
+    return closureHistory.map(h => {
+      const filteredOrders = h.orders?.filter(o => {
+        let matchesProduct = true;
+        let matchesLine = true;
+        
+        if (historyFilterProduct) {
+          matchesProduct = o.items && o.items.some(i => i.product?.name.toLowerCase().includes(historyFilterProduct.toLowerCase()));
+        }
+        if (historyFilterLine) {
+          matchesLine = o.items && o.items.some(i => i.product?.productLine?.name?.toLowerCase().includes(historyFilterLine.toLowerCase()));
+        }
+        return matchesProduct && matchesLine;
+      }) || [];
+      return { ...h, filteredOrders };
+    }).filter(h => {
+      if (historyFilterDate && h.date !== historyFilterDate) return false;
+      if ((historyFilterProduct || historyFilterLine) && h.filteredOrders.length === 0) return false;
+      return true;
+    });
+  }, [closureHistory, historyFilterDate, historyFilterProduct, historyFilterLine]);
+
   const byCategory = {};
   for (const e of expenses) {
     const name = e.category ? e.category.name : (e.legacyCategory || 'Sin Categoría');
@@ -452,6 +532,9 @@ const Finances = ({ openNewExpense }) => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Finanzas</h1>
         <div className="flex gap-3">
+          <button onClick={() => setShowFinanceAccountModal(true)} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-gray-200 shadow-sm transition-colors">
+            <Briefcase size={18} className="mr-1"/> Cuenta
+          </button>
           <button onClick={handleExportCSV} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-gray-200 shadow-sm transition-colors">
             Exportar CSV
           </button>
@@ -497,11 +580,13 @@ const Finances = ({ openNewExpense }) => {
         </div>
       </div>
 
-      <div className="flex border-b border-gray-200 mb-6 gap-6">
-        <button onClick={() => setActiveTab('RESUMEN')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'RESUMEN' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Resumen Financiero</button>
-        <button onClick={() => setActiveTab('CIERRE')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'CIERRE' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cierre de Caja Diario</button>
-        <button onClick={() => setActiveTab('CUENTAS')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'CUENTAS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cuentas por Cobrar</button>
-        <button onClick={() => setActiveTab('INVENTARIO')} className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'INVENTARIO' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Inventario Esperado</button>
+      <div className="flex border-b border-gray-200 mb-6 gap-6 overflow-x-auto">
+        <button onClick={() => setActiveTab('RESUMEN')} className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'RESUMEN' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Resumen Financiero</button>
+        <button onClick={() => setActiveTab('CIERRE')} className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'CIERRE' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cierre de Caja Diario</button>
+        <button onClick={() => setActiveTab('HISTORIAL_CIERRES')} className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'HISTORIAL_CIERRES' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Historial de Cierres</button>
+        <button onClick={() => setActiveTab('CUENTAS')} className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'CUENTAS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cuentas por Cobrar</button>
+        <button onClick={() => setActiveTab('ADMIN_CUENTAS')} className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'ADMIN_CUENTAS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Cuentas Bancarias</button>
+        <button onClick={() => setActiveTab('INVENTARIO')} className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'INVENTARIO' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Inventario Esperado</button>
       </div>
 
       {activeTab === 'RESUMEN' && (
@@ -569,6 +654,11 @@ const Finances = ({ openNewExpense }) => {
 
       {activeTab === 'CIERRE' && (
         <div className="space-y-6">
+          <div className="flex border-b border-gray-100 gap-2 mb-2">
+            <button onClick={() => setCierreCurrencyTab('$')} className={`px-4 py-2 rounded-t-xl text-xs font-bold transition-colors ${cierreCurrencyTab === '$' ? 'bg-green-100 text-green-700 border-b-2 border-green-500' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>Cierre en Dólares ($)</button>
+            <button onClick={() => setCierreCurrencyTab('Bs')} className={`px-4 py-2 rounded-t-xl text-xs font-bold transition-colors ${cierreCurrencyTab === 'Bs' ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-500' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>Cierre en Bolívares (Bs)</button>
+          </div>
+
           <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm">
             <div className="flex items-center gap-3">
               <label className="text-sm font-bold text-gray-600">Fecha del Cierre:</label>
@@ -590,163 +680,251 @@ const Finances = ({ openNewExpense }) => {
 
           <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
             <div className="p-5 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="font-bold text-gray-800">Órdenes del Día Completadas</h2>
+              <h2 className="font-bold text-gray-800">Órdenes del Día Completadas en {cierreCurrencyTab}</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-white text-gray-400 font-bold uppercase text-[10px] border-b border-gray-100">
                   <tr>
                     <th className="p-3">Cliente / ID</th>
-                    <th className="p-3">Monto ($)</th>
-                    <th className="p-3">Monto (Bs)</th>
+                    {cierreCurrencyTab === '$' ? <th className="p-3">Monto ($)</th> : <th className="p-3">Monto (Bs)</th>}
                     <th className="p-3">Método de Pago</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {closureOrders.map((o, index) => (
+                  {closureOrders.filter(o => o.paymentMethod && o.paymentMethod.includes(`(${cierreCurrencyTab})`)).map((o, index) => (
                     <tr key={o.id} className="hover:bg-gray-50">
                       <td className="p-3">
                         <div className="font-bold">{o.customerName}</div>
                         <div className="text-xs text-gray-500">#{o.id}</div>
                       </td>
                       <td className="p-3">
-                        <input 
-                          type="number" step="0.01"
-                          value={o.totalAmount}
-                          onChange={(e) => {
-                            const newOrders = [...closureOrders];
-                            newOrders[index].totalAmount = e.target.value;
-                            setClosureOrders(newOrders);
-                          }}
-                          className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
-                        />
-                      </td>
-                      <td className="p-3">
-                        <input 
-                          type="number" step="0.01"
-                          value={o.totalAmountBs || ''}
-                          onChange={(e) => {
-                            const newOrders = [...closureOrders];
-                            newOrders[index].totalAmountBs = e.target.value;
-                            setClosureOrders(newOrders);
-                          }}
-                          className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
-                        />
+                        {cierreCurrencyTab === '$' ? (
+                          <input 
+                            type="number" step="0.01"
+                            value={o.totalAmount}
+                            onChange={(e) => {
+                              const newOrders = [...closureOrders];
+                              const orderIndex = closureOrders.findIndex(order => order.id === o.id);
+                              newOrders[orderIndex].totalAmount = e.target.value;
+                              setClosureOrders(newOrders);
+                            }}
+                            className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
+                          />
+                        ) : (
+                          <input 
+                            type="number" step="0.01"
+                            value={o.totalAmountBs || ''}
+                            onChange={(e) => {
+                              const newOrders = [...closureOrders];
+                              const orderIndex = closureOrders.findIndex(order => order.id === o.id);
+                              newOrders[orderIndex].totalAmountBs = e.target.value;
+                              setClosureOrders(newOrders);
+                            }}
+                            className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
+                          />
+                        )}
                       </td>
                       <td className="p-3">
                         <select
                           value={o.paymentMethod || ''}
                           onChange={(e) => {
                             const newOrders = [...closureOrders];
-                            newOrders[index].paymentMethod = e.target.value;
+                            const orderIndex = closureOrders.findIndex(order => order.id === o.id);
+                            newOrders[orderIndex].paymentMethod = e.target.value;
                             setClosureOrders(newOrders);
                           }}
                           className="border rounded p-1 text-sm outline-none focus:border-blue-500"
                         >
-                          <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
-                          <option value="Transferencia ($)">Transferencia ($)</option>
-                          <option value="Efectivo (Bs)">Efectivo (Bs)</option>
-                          <option value="Efectivo ($)">Efectivo ($)</option>
+                          {cierreCurrencyTab === '$' ? (
+                            <>
+                              <option value="Transferencia ($)">Transferencia ($)</option>
+                              <option value="Efectivo ($)">Efectivo ($)</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
+                              <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                            </>
+                          )}
                         </select>
                       </td>
                     </tr>
                   ))}
-                  {closureOrders.length === 0 && (
-                    <tr><td colSpan="4" className="p-6 text-center text-gray-400">No hay órdenes completadas para esta fecha.</td></tr>
+                  {closureOrders.filter(o => o.paymentMethod && o.paymentMethod.includes(`(${cierreCurrencyTab})`)).length === 0 && (
+                    <tr><td colSpan="3" className="p-6 text-center text-gray-400">No hay órdenes en {cierreCurrencyTab} para esta fecha.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
         
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-xl border shadow-sm w-full lg:col-span-1 h-fit">
-              <h3 className="font-bold text-gray-800 mb-4 uppercase text-xs tracking-wider">Resumen de Caja</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-xl border shadow-sm w-full h-fit">
+              <h3 className="font-bold text-gray-800 mb-4 uppercase text-xs tracking-wider">Resumen de Caja en {cierreCurrencyTab}</h3>
               
               <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Transferencia ($):</span>
-                  <span className="font-bold">${dynamicSummary.transf.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Pago Móvil (Bs):</span>
-                  <span className="font-bold">Bs. {dynamicSummary.pmBs.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Efectivo (Bs):</span>
-                  <span className="font-bold">Bs. {dynamicSummary.efeBs.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Efectivo ($):</span>
-                  <span className="font-bold">${dynamicSummary.efeD.toFixed(2)}</span>
-                </div>
+                {cierreCurrencyTab === '$' ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Transferencia ($):</span>
+                      <span className="font-bold">${dynamicSummary.transf.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Efectivo ($):</span>
+                      <span className="font-bold">${dynamicSummary.efeD.toFixed(2)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Pago Móvil (Bs):</span>
+                      <span className="font-bold">Bs. {dynamicSummary.pmBs.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Efectivo (Bs):</span>
+                      <span className="font-bold">Bs. {dynamicSummary.efeBs.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
-                <div className="flex justify-between">
-                  <span className="text-gray-800 font-bold">Total $:</span>
-                  <span className="font-black text-green-700">
-                    ${dynamicSummary.totalD.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-800 font-bold">Total Bs:</span>
-                  <span className="font-black text-blue-700">
-                    Bs. {dynamicSummary.totalBs.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 font-bold uppercase text-[10px] tracking-wider">Bruto</span>
-                  <div className="text-right">
-                    <span className="font-black text-gray-800 block">${dynamicSummary.bruto.toFixed(2)}</span>
+                {cierreCurrencyTab === '$' ? (
+                  <div className="flex justify-between">
+                    <span className="text-gray-800 font-bold">Total $:</span>
+                    <span className="font-black text-green-700">
+                      ${dynamicSummary.totalD.toFixed(2)}
+                    </span>
                   </div>
-                </div>
-                <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-200">
-                  <span className="text-gray-600 font-bold uppercase text-[10px] tracking-wider">Neto</span>
-                  <div className="text-right">
-                    <span className="font-black text-green-600 block">${dynamicSummary.neto.toFixed(2)}</span>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-gray-800 font-bold">Total Bs:</span>
+                    <span className="font-black text-blue-700">
+                      Bs. {dynamicSummary.totalBs.toFixed(2)}
+                    </span>
                   </div>
-                </div>
+                )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="bg-white rounded-xl border shadow-sm w-full lg:col-span-2 flex flex-col h-[400px]">
-              <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                <h3 className="font-bold text-gray-800">Historial de Cierres</h3>
-                <button onClick={handleExportCSV} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors">
-                  Exportar Todo (CSV)
-                </button>
+      {activeTab === 'HISTORIAL_CIERRES' && (
+        <div className="bg-white rounded-xl border shadow-sm w-full flex flex-col h-[600px]">
+          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-gray-800">Historial de Cierres</h3>
+              <button onClick={handleExportCSV} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors">
+                Exportar Todo (CSV)
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filtrar por Fecha</label>
+                <input type="date" value={historyFilterDate} onChange={e => setHistoryFilterDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm outline-none" />
               </div>
-              <div className="overflow-x-auto flex-1 overflow-y-auto">
-                <table className="w-full text-left text-sm relative">
-                  <thead className="bg-white text-gray-400 font-bold uppercase text-[10px] border-b border-gray-100 sticky top-0 shadow-sm z-10">
-                    <tr>
-                      <th className="p-4">Día</th>
-                      <th className="p-4">Órdenes</th>
-                      <th className="p-4">Bruto ($)</th>
-                      <th className="p-4">Neto ($)</th>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filtrar por Producto</label>
+                <input type="text" placeholder="Ej: Jabón..." value={historyFilterProduct} onChange={e => setHistoryFilterProduct(e.target.value)} className="w-full border rounded-lg p-2 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filtrar por Línea</label>
+                <input type="text" placeholder="Ej: Limpieza..." value={historyFilterLine} onChange={e => setHistoryFilterLine(e.target.value)} className="w-full border rounded-lg p-2 text-sm outline-none" />
+              </div>
+            </div>
+          </div>
+          <div className="overflow-x-auto flex-1 overflow-y-auto">
+            <table className="w-full text-left text-sm relative">
+              <thead className="bg-white text-gray-400 font-bold uppercase text-[10px] border-b border-gray-100 sticky top-0 shadow-sm z-10">
+                <tr>
+                  <th className="p-4">Día</th>
+                  <th className="p-4">Órdenes</th>
+                  <th className="p-4">Bruto ($)</th>
+                  <th className="p-4">Neto ($)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredHistory.map(h => (
+                  <React.Fragment key={h.date}>
+                    <tr onClick={() => setExpandedHistoryDate(expandedHistoryDate === h.date ? null : h.date)} className="hover:bg-gray-50 cursor-pointer">
+                      <td className="p-4 font-bold text-blue-600">{h.date}</td>
+                      <td className="p-4 text-gray-500">{h.filteredOrders.length}</td>
+                      <td className="p-4 font-bold text-gray-800">${Number(h.bruto).toFixed(2)}</td>
+                      <td className="p-4 font-black text-green-600">${Number(h.neto).toFixed(2)}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {closureHistory.map(h => (
-                      <tr key={h.date} className="hover:bg-gray-50">
-                        <td className="p-4 font-bold">{h.date}</td>
-                        <td className="p-4 text-gray-500">{h.orders?.length || 0}</td>
-                        <td className="p-4 font-bold text-gray-800">${Number(h.bruto).toFixed(2)}</td>
-                        <td className="p-4 font-black text-green-600">${Number(h.neto).toFixed(2)}</td>
+                    {expandedHistoryDate === h.date && (
+                      <tr>
+                        <td colSpan="4" className="p-0">
+                          <div className="bg-gray-50 p-4 border-b border-gray-100">
+                            <h4 className="font-bold text-gray-700 mb-2">Órdenes del {h.date}</h4>
+                            <div className="space-y-2">
+                              {h.filteredOrders.map(o => (
+                                <div key={o.id} className="bg-white border rounded-lg p-3 text-xs flex justify-between items-center">
+                                  <div>
+                                    <span className="font-bold text-gray-800">#{o.id} {o.customerName}</span>
+                                    <span className="text-gray-500 ml-2">({o.paymentMethod || 'No especificado'})</span>
+                                    <div className="text-gray-500 mt-1">
+                                      {o.items?.map(i => `${i.quantity}x ${i.product?.name}`).join(', ')}
+                                    </div>
+                                  </div>
+                                  <div className="font-bold text-gray-800">
+                                    ${Number(o.totalAmount).toFixed(2)}
+                                  </div>
+                                </div>
+                              ))}
+                              {h.filteredOrders.length === 0 && <p className="text-gray-500">No hay órdenes que coincidan con los filtros.</p>}
+                            </div>
+                          </div>
+                        </td>
                       </tr>
-                    ))}
-                    {closureHistory.length === 0 && (
-                      <tr><td colSpan="4" className="p-8 text-center text-gray-400">No hay historial de cierres</td></tr>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  </React.Fragment>
+                ))}
+                {filteredHistory.length === 0 && (
+                  <tr><td colSpan="4" className="p-8 text-center text-gray-400">No hay historial que coincida con los filtros</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'ADMIN_CUENTAS' && (
+        <div className="bg-white rounded-xl border shadow-sm w-full flex flex-col h-[600px]">
+          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2"><Briefcase size={18} className="text-blue-500"/> Cuentas Bancarias</h3>
+            <button onClick={() => setShowFinanceAccountModal(true)} className="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
+              Nueva Cuenta
+            </button>
+          </div>
+          <div className="overflow-x-auto flex-1 overflow-y-auto">
+            <table className="w-full text-left text-sm relative">
+              <thead className="bg-white text-gray-400 font-bold uppercase text-[10px] border-b border-gray-100 sticky top-0 shadow-sm z-10">
+                <tr>
+                  <th className="p-4">ID</th>
+                  <th className="p-4">Nombre de la Cuenta</th>
+                  <th className="p-4">Moneda</th>
+                  <th className="p-4">Balance Actual</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {financeAccounts.map(fa => (
+                  <tr key={fa.id} className="hover:bg-gray-50">
+                    <td className="p-4 text-gray-500 text-xs">#{fa.id}</td>
+                    <td className="p-4 font-bold">{fa.name}</td>
+                    <td className="p-4"><span className={`px-2 py-1 rounded-lg text-xs font-bold ${fa.currency === '$' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{fa.currency}</span></td>
+                    <td className={`p-4 font-black ${fa.currency === '$' ? 'text-green-600' : 'text-blue-600'}`}>
+                      {fa.currency === '$' ? '$' : 'Bs. '}{Number(fa.balance).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+                {financeAccounts.length === 0 && (
+                  <tr><td colSpan="4" className="p-8 text-center text-gray-400">No hay cuentas creadas</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -833,6 +1011,7 @@ const Finances = ({ openNewExpense }) => {
 
       {showTransactionModal && <TransactionModal onClose={() => setShowTransactionModal(false)} onCreated={fetchAll} categories={categories} />}
       {showCategoryModal && <CategoryModal onClose={() => setShowCategoryModal(false)} onCreated={fetchAll} existingCategories={categories} />}
+      {showFinanceAccountModal && <FinanceAccountModal onClose={() => setShowFinanceAccountModal(false)} onCreated={fetchAll} />}
     </div>
   );
 };

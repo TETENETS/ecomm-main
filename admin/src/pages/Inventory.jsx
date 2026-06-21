@@ -30,8 +30,14 @@ const Inventory = () => {
   const [productLineId, setProductLineId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [variants, setVariants] = useState([]);
+  const [existingImage, setExistingImage] = useState('');
 
-  // Product Line Form State
+  // Add Stock Form State
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [stockProductId, setStockProductId] = useState('');
+  const [stockVariantId, setStockVariantId] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('');
+  const [stockPurchasePrice, setStockPurchasePrice] = useState('');
   const [lineName, setLineName] = useState('');
   const [lineDescription, setLineDescription] = useState('');
   const [lineImage, setLineImage] = useState(null);
@@ -177,6 +183,7 @@ const Inventory = () => {
     setImage(null);
     setProductLineId(product.productLineId || '');
     setCategoryId(product.categoryId || '');
+    setExistingImage(product.imageUrl || '');
     
     const mappedVariants = product.variants ? product.variants.map(v => ({
       name: v.name,
@@ -246,7 +253,31 @@ const Inventory = () => {
   const resetForm = () => {
     setShowProductForm(false);
     setEditingId(null);
-    setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setVariants([]); setProductLineId(''); setCategoryId('');
+    setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setExistingImage(''); setVariants([]); setProductLineId(''); setCategoryId('');
+  };
+
+  const handleSaveStock = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post('/products/add-stock', {
+        productId: stockProductId,
+        variantId: stockVariantId || null,
+        quantity: stockQuantity,
+        purchasePrice: stockPurchasePrice
+      });
+      setShowStockModal(false);
+      setStockProductId('');
+      setStockVariantId('');
+      setStockQuantity('');
+      setStockPurchasePrice('');
+      fetchData();
+      alert('Stock agregado exitosamente. El costo unitario se ha actualizado según el promedio ponderado.');
+    } catch (error) {
+      alert('Error agregando stock');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Toggles
@@ -280,6 +311,9 @@ const Inventory = () => {
           </button>
           <button onClick={() => { setEditingLineId(null); setLineName(''); setLineDescription(''); setLineImage(null); setShowLineModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
             <Folder size={20} /> Nueva Línea
+          </button>
+          <button onClick={() => { setShowStockModal(true); }} className="bg-green-100 text-green-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-green-200 transition-colors shadow-sm">
+            <Plus size={20} /> Añadir Stock
           </button>
           <button onClick={() => { resetForm(); setShowProductForm(true); }} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm">
             <Plus size={20} /> Nuevo Producto
@@ -387,6 +421,51 @@ const Inventory = () => {
         </div>
       )}
 
+      {/* --- MODAL AÑADIR STOCK --- */}
+      {showStockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowStockModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="font-bold text-lg text-gray-800">Añadir Stock</h3>
+              <button onClick={() => setShowStockModal(false)} className="p-2 hover:bg-gray-100 rounded-xl"><X size={18} className="text-gray-400" /></button>
+            </div>
+            <form onSubmit={handleSaveStock} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Producto *</label>
+                <select required value={stockProductId} onChange={e => { setStockProductId(e.target.value); setStockVariantId(''); }} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
+                  <option value="">-- Seleccionar Producto --</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              {stockProductId && products.find(p => p.id === parseInt(stockProductId))?.variants?.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Variante *</label>
+                  <select required value={stockVariantId} onChange={e => setStockVariantId(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
+                    <option value="">-- Seleccionar Variante --</option>
+                    {products.find(p => p.id === parseInt(stockProductId)).variants.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad *</label>
+                  <input type="number" required min="1" value={stockQuantity} onChange={e => setStockQuantity(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" placeholder="0" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio de Compra *</label>
+                  <input type="number" step="0.01" required min="0" value={stockPurchasePrice} onChange={e => setStockPurchasePrice(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" placeholder="0.00" />
+                </div>
+              </div>
+              <div className="flex justify-end pt-2">
+                <button type="submit" disabled={saving} className="bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-2.5 rounded-xl flex items-center gap-2">{saving && <Loader2 size={15} className="animate-spin" />} Guardar Stock</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* --- FORMULARIO DE PRODUCTO --- */}
       {showProductForm && (
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
@@ -428,6 +507,11 @@ const Inventory = () => {
                     <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={e => setImage(e.target.files[0])} />
                     {image ? (
                       <div className="text-blue-600 font-bold flex items-center gap-2"><ImageIcon size={24} /> {image.name}</div>
+                    ) : existingImage ? (
+                      <div className="flex flex-col items-center">
+                        <ImageIcon size={32} className="text-green-500 mb-2" />
+                        <span className="text-sm font-medium text-green-600">Imagen actual guardada. Clic para cambiar.</span>
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center">
                         <ImageIcon size={32} className="text-gray-400 mb-2 group-hover:text-blue-500" />
@@ -438,18 +522,10 @@ const Inventory = () => {
                 </div>
 
                 {variants.length === 0 && (
-                  <div className="grid grid-cols-3 gap-4 pt-2">
+                  <div className="grid grid-cols-1 gap-4 pt-2">
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Costo</label>
-                      <input type="number" step="0.01" className="w-full bg-gray-50 border p-3 rounded-xl outline-none" value={costPrice} onChange={e => setCostPrice(e.target.value)} placeholder="0.00" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Venta *</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">Precio de Venta *</label>
                       <input type="number" step="0.01" className="w-full bg-gray-50 border p-3 rounded-xl outline-none" value={price} onChange={e => setPrice(e.target.value)} required={variants.length === 0} placeholder="0.00" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-1">Stock *</label>
-                      <input type="number" className="w-full bg-gray-50 border p-3 rounded-xl outline-none" value={stock} onChange={e => setStock(e.target.value)} required={variants.length === 0} placeholder="0" />
                     </div>
                   </div>
                 )}
@@ -473,14 +549,8 @@ const Inventory = () => {
                       <div className="flex-1 min-w-[150px]">
                         <input placeholder="Ej: Talla M - Rojo" className="w-full bg-gray-50 p-2.5 rounded-lg text-sm outline-none" value={v.name} onChange={e => updateVariant(i, 'name', e.target.value)} required/>
                       </div>
-                      <div className="w-24">
-                        <input placeholder="Costo" type="number" step="0.01" className="w-full border py-2.5 px-2 rounded-lg text-sm outline-none" value={v.costPrice} onChange={e => updateVariant(i, 'costPrice', e.target.value)} />
-                      </div>
-                      <div className="w-24">
+                      <div className="w-32">
                         <input placeholder="Venta" type="number" step="0.01" className="w-full border border-blue-200 bg-blue-50/30 py-2.5 px-2 rounded-lg text-sm text-blue-700 font-bold outline-none" value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} required/>
-                      </div>
-                      <div className="w-20">
-                        <input placeholder="Stock" type="number" className="w-full border py-2.5 px-2 rounded-lg text-sm outline-none" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} required/>
                       </div>
                       <div className="flex items-center gap-1">
                         <div className="relative">

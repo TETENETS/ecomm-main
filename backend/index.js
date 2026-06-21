@@ -457,6 +457,58 @@ app.put('/api/products/:id', authMiddleware, upload.any(), async (req, res) => {
   }
 }); 
 
+// Add stock to a product/variant
+app.post('/api/products/add-stock', authMiddleware, async (req, res) => {
+  try {
+    const { productId, variantId, quantity, purchasePrice } = req.body;
+    const qty = parseInt(quantity);
+    const pPrice = parseFloat(purchasePrice);
+
+    if (isNaN(qty) || qty <= 0 || isNaN(pPrice) || pPrice < 0) {
+      return res.status(400).json({ error: 'Invalid quantity or purchase price' });
+    }
+
+    if (variantId) {
+      const variant = await prisma.productVariant.findUnique({ where: { id: parseInt(variantId) } });
+      if (!variant) return res.status(404).json({ error: 'Variant not found' });
+      
+      const oldStock = variant.stock;
+      const oldCost = variant.costPrice ? parseFloat(variant.costPrice) : 0;
+      const newStock = oldStock + qty;
+      const newCost = ((oldStock * oldCost) + (qty * pPrice)) / newStock;
+
+      const updated = await prisma.productVariant.update({
+        where: { id: parseInt(variantId) },
+        data: {
+          stock: newStock,
+          costPrice: newCost
+        }
+      });
+      res.json(updated);
+    } else {
+      const product = await prisma.product.findUnique({ where: { id: parseInt(productId) } });
+      if (!product) return res.status(404).json({ error: 'Product not found' });
+
+      const oldStock = product.stock;
+      const oldCost = product.costPrice ? parseFloat(product.costPrice) : 0;
+      const newStock = oldStock + qty;
+      const newCost = ((oldStock * oldCost) + (qty * pPrice)) / newStock;
+
+      const updated = await prisma.product.update({
+        where: { id: parseInt(productId) },
+        data: {
+          stock: newStock,
+          costPrice: newCost
+        }
+      });
+      res.json(updated);
+    }
+  } catch (error) {
+    console.error('Error adding stock:', error);
+    res.status(500).json({ error: 'Error adding stock' });
+  }
+});
+
 
 // Borrar producto
 app.delete('/api/products/:id', authMiddleware, async (req, res) => {
@@ -844,7 +896,7 @@ app.post('/api/checkout', async (req, res) => {
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
     const { status } = req.query;
-    const where = status && status !== 'ALL' ? { status } : { status: { not: 'COMPLETED' } };
+    const where = status && status !== 'ALL' ? { status } : {};
     const orders = await prisma.order.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -877,6 +929,7 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
 
     const updateData = { status };
     if (paymentMethod) updateData.paymentMethod = paymentMethod;
+    if (req.body.financeAccountId) updateData.financeAccountId = parseInt(req.body.financeAccountId);
 
     if (status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates)) {
       // Create due dates
@@ -891,6 +944,13 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
       data: updateData,
       include: { items: { include: { product: true, variant: true } }, dueDates: true }
     });
+
+    if (oldOrder.status !== 'COMPLETED' && status === 'COMPLETED' && updateData.financeAccountId) {
+      await prisma.financeAccount.update({
+        where: { id: updateData.financeAccountId },
+        data: { balance: { increment: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+      });
+    }
 
     // Stock management
     if (oldOrder.status !== 'CANCELED' && status === 'CANCELED') {
@@ -1176,7 +1236,7 @@ app.get('/api/closure/history', authMiddleware, async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       where: { status: 'COMPLETED' },
-      include: { items: { include: { product: true, variant: true } } },
+      include: { items: { include: { product: { include: { productLine: true } }, variant: true } } },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -1320,6 +1380,56 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 // Fallback routing for React Admin
 app.get('/admin/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/admin/index.html'));
+});
+
+// --- FINANCE ACCOUNTS ---
+app.get('/api/finance-accounts', authMiddleware, async (req, res) => {
+  try {
+    const accounts = await prisma.financeAccount.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json(accounts);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching accounts' });
+  }
+});
+
+app.post('/api/finance-accounts', authMiddleware, async (req, res) => {
+  try {
+    const { name, currency } = req.body;
+    const account = await prisma.financeAccount.create({ data: { name, currency } });
+    res.json(account);
+  } catch (error) {
+    res.status(500).json({ error: 'Error creating account' });
+  }
+});
+
+// --- DAILY CLOSING ENDPOINTS ---
+app.get('/api/daily-closings', authMiddleware, async (req, res) => {
+  try {
+    const closings = await prisma.dailyClosing.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(closings);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching daily closings' });
+  }
+});
+
+app.post('/api/daily-closings', authMiddleware, async (req, res) => {
+  try {
+    const { currency, totalAmount, orderCount, ordersInfo } = req.body;
+    const closing = await prisma.dailyClosing.create({
+      data: {
+        currency,
+        totalAmount,
+        orderCount,
+        ordersInfo
+      }
+    });
+    res.status(201).json(closing);
+  } catch (error) {
+    console.error('Error saving daily closing', error);
+    res.status(500).json({ error: 'Error saving daily closing' });
+  }
 });
 
 // --- LOGGING ENDPOINTS ---

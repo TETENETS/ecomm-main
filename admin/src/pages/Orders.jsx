@@ -60,20 +60,26 @@ const LocationSelector = ({ lat, lng, onChange }) => {
 };
 
 // ── Modal: detalle de pedido ──────────────────────────────────────
-const OrderModal = ({ order, onClose, onStatusChange }) => {
+const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
   const [saving, setSaving] = useState(false);
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(order?.paymentMethod || 'Pago Móvil (Bs)');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
   const [editDueDates, setEditDueDates] = useState(
     order?.dueDates?.length > 0 ? order.dueDates.map(d => d.dueDate.split('T')[0]) : ['']
   );
   if (!order) return null;
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
-
   const changeStatus = async (newStatus) => {
-    if (newStatus === 'COMPLETED' && !showPaymentPrompt) {
-      setShowPaymentPrompt(true);
-      return;
+    if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId)) {
+      if (!showPaymentPrompt) {
+        setShowPaymentPrompt(true);
+        return;
+      }
+      if (!selectedAccountId) {
+        alert('Debe seleccionar una cuenta a la cual acreditar el pago.');
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -81,7 +87,8 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
         order.id, 
         newStatus, 
         newStatus === 'PENDING_PAYMENT' ? editDueDates.filter(d => d) : undefined,
-        newStatus === 'COMPLETED' ? selectedPaymentMethod : undefined
+        newStatus === 'COMPLETED' ? selectedPaymentMethod : undefined,
+        newStatus === 'COMPLETED' ? selectedAccountId : undefined
       );
       setShowPaymentPrompt(false);
     } finally {
@@ -629,11 +636,12 @@ const Orders = ({ openNewOrder }) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [products, setProducts] = useState([]);
+  const [financeAccounts, setFinanceAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, [statusFilter]);
+  }, []);
 
   // Auto-abrir modal si viene desde Dashboard
   useEffect(() => {
@@ -643,9 +651,14 @@ const Orders = ({ openNewOrder }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [oRes, pRes] = await Promise.all([api.get(`/orders?status=${statusFilter === 'ALL' ? '' : statusFilter}`), api.get('/products')]);
+      const [oRes, pRes, fRes] = await Promise.all([
+        api.get('/orders?status=ALL'), 
+        api.get('/products'),
+        api.get('/finance-accounts')
+      ]);
       setOrders(oRes.data);
       setProducts(pRes.data);
+      setFinanceAccounts(fRes.data);
 
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get('id');
@@ -662,18 +675,20 @@ const Orders = ({ openNewOrder }) => {
   };
 
 
-  const handleStatusChange = async (id, status, dueDates, paymentMethod) => {
+  const handleStatusChange = async (id, status, dueDates, paymentMethod, financeAccountId) => {
     const payload = { status };
     if (dueDates) payload.dueDates = dueDates;
     if (paymentMethod) payload.paymentMethod = paymentMethod;
+    if (financeAccountId) payload.financeAccountId = financeAccountId;
     const res = await api.patch(`/orders/${id}/status`, payload);
     setOrders(prev => prev.map(o => o.id === id ? res.data : o));
     if (selectedOrder?.id === id) setSelectedOrder(res.data);
   };
 
   const filtered = orders.filter(o =>
-    o.customerName?.toLowerCase().includes(search.toLowerCase()) ||
-    String(o.id).includes(search)
+    (statusFilter === 'ALL' || o.status === statusFilter) &&
+    (o.customerName?.toLowerCase().includes(search.toLowerCase()) ||
+    String(o.id).includes(search))
   );
 
   const counts = {
@@ -805,7 +820,7 @@ const Orders = ({ openNewOrder }) => {
       </div>
 
       {selectedOrder && (
-        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} />
+        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} financeAccounts={financeAccounts} />
       )}
       {showNewOrder && (
         <NewOrderModal onClose={() => setShowNewOrder(false)} onCreated={fetchData} products={products} />
