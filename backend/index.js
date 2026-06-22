@@ -1282,7 +1282,7 @@ app.get('/api/closure/orders', authMiddleware, async (req, res) => {
         status: 'COMPLETED',
         createdAt: { gte: start, lte: end }
       },
-      include: { items: { include: { product: true, variant: true } } },
+      include: { financeAccount: true, items: { include: { product: true, variant: true } } },
       orderBy: { createdAt: 'desc' }
     });
     res.json(orders);
@@ -1302,7 +1302,8 @@ app.put('/api/closure/orders', authMiddleware, async (req, res) => {
         data: {
           totalAmount: parseFloat(u.totalAmount),
           totalAmountBs: u.totalAmountBs ? parseFloat(u.totalAmountBs) : null,
-          paymentMethod: u.paymentMethod
+          paymentMethod: u.paymentMethod,
+          financeAccountId: u.financeAccountId ? parseInt(u.financeAccountId) : null
         }
       });
     }

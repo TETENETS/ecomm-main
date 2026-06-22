@@ -363,7 +363,8 @@ const Finances = ({ openNewExpense }) => {
         id: o.id,
         totalAmount: o.totalAmount,
         totalAmountBs: o.totalAmountBs,
-        paymentMethod: o.paymentMethod
+        paymentMethod: o.paymentMethod,
+        financeAccountId: o.financeAccountId
       }));
       await api.put('/closure/orders', { updates });
       alert('Cierre de caja guardado exitosamente.');
@@ -451,17 +452,27 @@ const Finances = ({ openNewExpense }) => {
   };
   
   const dynamicSummary = React.useMemo(() => {
-    let tTransf = 0, tEfeD = 0, tPmBs = 0, tEfeBs = 0;
+    const summary = { '$': {}, 'Bs': {} };
+    let totalBrutoDollar = 0;
     let totalCost = 0;
-    let totalBrutoDollar = 0; // Gross in Dollar across all
+
+    let totalD = 0;
+    let totalBs = 0;
 
     closureOrders.forEach(o => {
       const pm = o.paymentMethod || '';
       const gross = parseFloat(o.totalAmount || 0);
       const grossBs = parseFloat(o.totalAmountBs || 0);
 
-      // The frontend uses backend totalAmount as the definitive dollar value
-      // This solves the problem that if users manually modify amount, they modify totalAmount
+      const accId = o.financeAccountId || o.financeAccount?.id;
+      const accName = financeAccounts.find(a => a.id === Number(accId))?.name || (o.paymentMethod || 'No especificado');
+      const currency = financeAccounts.find(a => a.id === Number(accId))?.currency || (o.paymentMethod?.includes('(Bs)') ? 'Bs' : '$');
+      const amount = currency === 'Bs' ? grossBs : gross;
+      summary[currency][accName] = (summary[currency][accName] || 0) + amount;
+
+      if (currency === '$') totalD += gross;
+      if (currency === 'Bs') totalBs += grossBs;
+
       let cost = 0;
       if (o.items) {
         o.items.forEach(item => {
@@ -472,32 +483,21 @@ const Finances = ({ openNewExpense }) => {
         });
       }
 
-      if (pm === 'Transferencia ($)') tTransf += gross;
-      else if (pm === 'Efectivo ($)') tEfeD += gross;
-      else if (pm === 'Pago Móvil (Bs)') tPmBs += grossBs;
-      else if (pm === 'Efectivo (Bs)') tEfeBs += grossBs;
-
       const rate = parseFloat(o.bcvRate) || currentBcvRate || 1;
+      let orderBrutoDollar = gross;
       if (pm.includes('(Bs)')) {
-        totalBrutoDollar += (grossBs / rate);
-      } else {
-        totalBrutoDollar += gross;
+        orderBrutoDollar = grossBs / rate;
       }
-      
+      totalBrutoDollar += orderBrutoDollar;
       totalCost += cost;
     });
 
-    return { 
-      transf: tTransf, 
-      efeD: tEfeD, 
-      pmBs: tPmBs, 
-      efeBs: tEfeBs, 
-      totalD: tTransf + tEfeD, 
-      totalBs: tPmBs + tEfeBs, 
-      bruto: totalBrutoDollar, 
-      neto: totalBrutoDollar - totalCost 
-    };
-  }, [closureOrders]);
+    summary.totalD = totalD;
+    summary.totalBs = totalBs;
+    summary.bruto = totalBrutoDollar;
+    summary.neto = totalBrutoDollar - totalCost;
+    return summary;
+  }, [closureOrders, financeAccounts, currentBcvRate]);
 
   const filteredHistory = React.useMemo(() => {
     return closureHistory.map(h => {
@@ -689,6 +689,7 @@ const Finances = ({ openNewExpense }) => {
                     <th className="p-3">Cliente / ID</th>
                     {cierreCurrencyTab === '$' ? <th className="p-3">Monto ($)</th> : <th className="p-3">Monto (Bs)</th>}
                     <th className="p-3">Método de Pago</th>
+                    <th className="p-3">Cuenta Destino</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -734,7 +735,7 @@ const Finances = ({ openNewExpense }) => {
                             newOrders[orderIndex].paymentMethod = e.target.value;
                             setClosureOrders(newOrders);
                           }}
-                          className="border rounded p-1 text-sm outline-none focus:border-blue-500"
+                          className="border rounded p-1 text-sm outline-none focus:border-blue-500 mb-1"
                         >
                           {cierreCurrencyTab === '$' ? (
                             <>
@@ -747,6 +748,23 @@ const Finances = ({ openNewExpense }) => {
                               <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                             </>
                           )}
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <select
+                          value={o.financeAccountId || o.financeAccount?.id || ''}
+                          onChange={(e) => {
+                            const newOrders = [...closureOrders];
+                            const orderIndex = closureOrders.findIndex(order => order.id === o.id);
+                            newOrders[orderIndex].financeAccountId = e.target.value;
+                            setClosureOrders(newOrders);
+                          }}
+                          className="border rounded p-1 text-sm outline-none focus:border-blue-500"
+                        >
+                          <option value="">-- Sin asignar --</option>
+                          {financeAccounts.filter(fa => fa.currency === cierreCurrencyTab).map(fa => (
+                            <option key={fa.id} value={fa.id}>{fa.name}</option>
+                          ))}
                         </select>
                       </td>
                     </tr>
@@ -764,28 +782,14 @@ const Finances = ({ openNewExpense }) => {
               <h3 className="font-bold text-gray-800 mb-4 uppercase text-xs tracking-wider">Resumen de Caja en {cierreCurrencyTab}</h3>
               
               <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
-                {cierreCurrencyTab === '$' ? (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Transferencia ($):</span>
-                      <span className="font-bold">${dynamicSummary.transf.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Efectivo ($):</span>
-                      <span className="font-bold">${dynamicSummary.efeD.toFixed(2)}</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Pago Móvil (Bs):</span>
-                      <span className="font-bold">Bs. {dynamicSummary.pmBs.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Efectivo (Bs):</span>
-                      <span className="font-bold">Bs. {dynamicSummary.efeBs.toFixed(2)}</span>
-                    </div>
-                  </>
+                {Object.entries(dynamicSummary[cierreCurrencyTab] || {}).map(([accName, amount]) => (
+                  <div key={accName} className="flex justify-between">
+                    <span className="text-gray-600">{accName}:</span>
+                    <span className="font-bold">{cierreCurrencyTab === '$' ? '$' : 'Bs. '} {amount.toFixed(2)}</span>
+                  </div>
+                ))}
+                {Object.keys(dynamicSummary[cierreCurrencyTab] || {}).length === 0 && (
+                  <div className="text-gray-400">Sin movimientos</div>
                 )}
               </div>
 
