@@ -901,28 +901,7 @@ app.post('/api/checkout', async (req, res) => {
       totalAmount += parseFloat(price) * item.quantity;
       
       
-      // Stock deduction
-      const currentStock = item.variantId && variant ? variant.stock : product.stock;
-      const newStock = Math.max(0, currentStock - item.quantity);
-      
-      if (item.variantId && variant) {
-        await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: newStock } });
-      } else {
-        await prisma.product.update({ where: { id: product.id }, data: { stock: newStock } });
-      }
-      
-      if (newStock < 3) {
-        try {
-          const pName = variant ? `${product.name} - ${variant.name}` : product.name;
-          await sendAlert('LOW_STOCK', `Alerta, Producto bajo en stock quedan menos de 3 unidades: ${pName}`, {
-            productId: product.id,
-            productName: pName,
-            remaining: newStock
-          });
-        } catch (e) {
-          console.error("Error sending LOW_STOCK alert:", e);
-        }
-      }
+      // Stock is no longer deducted at checkout; it is deducted when the order is COMPLETED
 
       orderItemsData.push({
         productId: product.id,
@@ -1058,6 +1037,10 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    if (oldOrder.status === 'COMPLETED' && status === 'CANCELED') {
+      return res.status(400).json({ error: 'No se puede cancelar directamente una orden completada. Debe reversarse primero.' });
+    }
+
     const updateData = { status };
     if (paymentMethod) updateData.paymentMethod = paymentMethod;
     if (req.body.financeAccountId) updateData.financeAccountId = parseInt(req.body.financeAccountId);
@@ -1077,34 +1060,17 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
       include: { items: { include: { product: true, variant: true } }, dueDates: true }
     });
 
-    if (oldOrder.status !== 'COMPLETED' && status === 'COMPLETED' && updateData.financeAccountId) {
-      await prisma.financeAccount.update({
-        where: { id: updateData.financeAccountId },
-        data: { balance: { increment: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
-      });
-    }
-
-    // Stock management
-    if (oldOrder.status !== 'CANCELED' && status === 'CANCELED') {
-      // Re-stock
-      for (const item of order.items) {
-        if (item.productVariantId) {
-          await prisma.productVariant.update({
-            where: { id: item.productVariantId },
-            data: { stock: { increment: item.quantity } }
-          });
-        } else {
-          await prisma.product.update({
-            where: { id: item.productId },
-            data: { stock: { increment: item.quantity } }
-          });
-        }
+    if (oldOrder.status !== 'COMPLETED' && status === 'COMPLETED') {
+      // Add money to finance account
+      if (updateData.financeAccountId) {
+        await prisma.financeAccount.update({
+          where: { id: updateData.financeAccountId },
+          data: { balance: { increment: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+        });
       }
-    } else if (oldOrder.status === 'CANCELED' && status !== 'CANCELED') {
-      // De-stock
+      // De-stock (deduct inventory)
       for (const item of order.items) {
         if (item.productVariantId) {
-          // ensure it doesn't go below 0 if somehow that happens, but decrement is fine
           await prisma.productVariant.update({
             where: { id: item.productVariantId },
             data: { stock: { decrement: item.quantity } }
@@ -1148,6 +1114,56 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
   }
 });
 
+// Reverse a completed order
+app.post('/api/orders/:id/reverse', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const order = await prisma.order.findUnique({
+      where: { id: parseInt(id) },
+      include: { items: true }
+    });
+    
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'COMPLETED') return res.status(400).json({ error: 'Solo se pueden reversar órdenes completadas.' });
+
+    // 1. Subtract money from finance account
+    if (order.financeAccountId) {
+      await prisma.financeAccount.update({
+        where: { id: order.financeAccountId },
+        data: { balance: { decrement: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+      });
+    }
+
+    // 2. Return stock to inventory
+    for (const item of order.items) {
+      if (item.productVariantId) {
+        await prisma.productVariant.update({
+          where: { id: item.productVariantId },
+          data: { stock: { increment: item.quantity } }
+        });
+      } else {
+        await prisma.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } }
+        });
+      }
+    }
+
+    // 3. Set status back to PENDING and remove financeAccountId to allow editing
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: { status: 'PENDING', financeAccountId: null },
+      include: { items: { include: { product: true, variant: true } }, dueDates: true }
+    });
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error reversing order' });
+  }
+});
+
 // Create manual order (admin)
 app.post('/api/orders', authMiddleware, async (req, res) => {
   try {
@@ -1187,24 +1203,7 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
       }
       totalAmount += parseFloat(price) * item.quantity;
 
-      // Stock deduction
-      const currentStock = variant ? variant.stock : product.stock;
-      const newStock = Math.max(0, currentStock - item.quantity);
-      
-      if (item.variantId && variant) {
-        await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: newStock } });
-      } else {
-        await prisma.product.update({ where: { id: product.id }, data: { stock: newStock } });
-      }
-      
-      if (newStock < 3) {
-        const pName = variant ? `${product.name} - ${variant.name}` : product.name;
-        await sendAlert('LOW_STOCK', `Alerta, Producto bajo en stock quedan menos de 3 unidades: ${pName}`, {
-          productId: product.id,
-          productName: pName,
-          remaining: newStock
-        });
-      }
+      // Stock is no longer deducted immediately upon order creation. It is deducted when marked COMPLETED.
 
       orderItemsData.push({
         productId: product.id,
@@ -1233,6 +1232,26 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
       },
       include: { items: { include: { product: true, variant: true } }, dueDates: true }
     });
+
+    if (status === 'COMPLETED') {
+      for (const item of order.items) {
+        if (item.productVariantId) {
+          await prisma.productVariant.update({ where: { id: item.productVariantId }, data: { stock: { decrement: item.quantity } } });
+        } else {
+          await prisma.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } });
+        }
+      }
+      if (req.body.financeAccountId) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { financeAccountId: parseInt(req.body.financeAccountId) }
+        });
+        await prisma.financeAccount.update({
+          where: { id: parseInt(req.body.financeAccountId) },
+          data: { balance: { increment: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+        });
+      }
+    }
     
     const adminHost = req.get('origin') || 'http://localhost';
     const orderLink = `${adminHost}/orders?id=${order.id}`;

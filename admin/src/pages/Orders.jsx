@@ -105,6 +105,19 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
     }
   };
 
+  const handleReverse = async () => {
+    if (!window.confirm("¿Estás seguro de que deseas reversar esta orden? Los productos regresarán al inventario y se descontará el dinero de la cuenta (Movimiento en negativo). La orden pasará a estado Pendiente para su edición.")) return;
+    setSaving(true);
+    try {
+      await api.post(`/orders/${order.id}/reverse`);
+      window.location.reload(); 
+    } catch (e) {
+      alert(e.response?.data?.error || 'Error reversando orden');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveDueDates = async () => {
     setSaving(true);
     try {
@@ -312,7 +325,23 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
           <div className="border-t border-gray-100 pt-4">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Cambiar Estado</h3>
             
-            {showPaymentPrompt ? (
+            {order.status === 'CANCELED' ? (
+              <p className="text-sm font-bold text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 text-center">
+                Esta orden está cancelada y no puede ser modificada.
+              </p>
+            ) : order.status === 'COMPLETED' ? (
+              <div className="bg-green-50 p-4 rounded-xl border border-green-200 text-center space-y-4">
+                <p className="text-sm font-bold text-green-700">Esta orden está completada. El inventario fue descontado y el dinero ingresó a la cuenta destino.</p>
+                <button
+                  onClick={handleReverse}
+                  disabled={saving}
+                  className="w-full bg-red-600 text-white font-bold px-4 py-2.5 rounded-xl text-sm hover:bg-red-700 disabled:opacity-60 flex justify-center items-center gap-2 transition-colors"
+                >
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                  Reversar Orden
+                </button>
+              </div>
+            ) : showPaymentPrompt ? (
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-4 mb-4">
                 <div>
                   <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Confirmar Método de Pago</label>
@@ -364,18 +393,46 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
               </div>
             ) : (
               <div className="flex gap-3 flex-wrap">
-                {Object.entries(STATUS_CONFIG).map(([key, val]) => (
-                  <button
-                    key={key}
-                    disabled={order.status === key || saving}
-                    onClick={() => changeStatus(key)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed
-                      ${order.status === key ? `${val.bg} ${val.text} ${val.border}` : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <val.icon size={14} />}
-                    {val.label}
-                  </button>
-                ))}
+                {Object.entries(STATUS_CONFIG).map(([key, val]) => {
+                  if (key === 'COMPLETED') {
+                    return (
+                      <button
+                        key={key}
+                        disabled={order.status === key || saving}
+                        onClick={() => changeStatus(key)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-green-50 text-green-700 border-green-200 hover:bg-green-100`}
+                      >
+                        {saving ? <Loader2 size={14} className="animate-spin" /> : <val.icon size={14} />}
+                        Completar
+                      </button>
+                    );
+                  }
+                  if (key === 'CANCELED') {
+                    return (
+                      <button
+                        key={key}
+                        disabled={order.status === key || saving}
+                        onClick={() => changeStatus(key)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-red-50 text-red-700 border-red-200 hover:bg-red-100`}
+                      >
+                        {saving ? <Loader2 size={14} className="animate-spin" /> : <val.icon size={14} />}
+                        Cancelar
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      key={key}
+                      disabled={order.status === key || saving}
+                      onClick={() => changeStatus(key)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                        ${order.status === key ? `${val.bg} ${val.text} ${val.border}` : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {saving ? <Loader2 size={14} className="animate-spin" /> : <val.icon size={14} />}
+                      {val.label}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
