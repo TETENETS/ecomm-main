@@ -817,9 +817,16 @@ const Finances = ({ openNewExpense }) => {
 
       {activeTab === 'HISTORIAL_CIERRES' && (
         <div className="bg-white rounded-xl border shadow-sm w-full flex flex-col h-[600px]">
-          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <h3 className="font-bold text-gray-800">Historial de Cierres</h3>
+          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <h3 className="font-bold text-gray-800">Historial de Cierres</h3>
+                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">
+                  Este mes: {filteredHistory.filter(h => new Date(h.date).getMonth() === new Date().getMonth() && new Date(h.date).getFullYear() === new Date().getFullYear()).length} cierres
+                </span>
+              </div>
+              <button onClick={handleExportCSV} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors">
+                Exportar Todo (CSV)
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
