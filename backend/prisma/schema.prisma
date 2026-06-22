@@ -86,6 +86,7 @@ model Order {
 
   items              OrderItem[]
   dueDates           OrderDueDate[]
+  movements          OrderMovement[]
 }
 
 model OrderDueDate {
@@ -167,7 +168,9 @@ model FinanceAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
+  
   orders    Order[]
+  movements OrderMovement[]
 }
 
 model DailyClosing {
@@ -190,4 +193,17 @@ model StockLot {
   purchasePrice    Decimal         @db.Decimal(10, 2)
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
+}
+
+model OrderMovement {
+  id               Int             @id @default(autoincrement())
+  orderId          Int
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type             String          // "INCOME" or "REVERSAL"
+  amount           Decimal         @db.Decimal(10, 2)
+  amountBs         Decimal?        @db.Decimal(10, 2)
+  paymentMethod    String?
+  financeAccountId Int?
+  financeAccount   FinanceAccount? @relation(fields: [financeAccountId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
 }

@@ -1061,11 +1061,21 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
     });
 
     if (oldOrder.status !== 'COMPLETED' && status === 'COMPLETED') {
-      // Add money to finance account
+      // Add money to finance account and create OrderMovement
       if (updateData.financeAccountId) {
         await prisma.financeAccount.update({
           where: { id: updateData.financeAccountId },
           data: { balance: { increment: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+        });
+        await prisma.orderMovement.create({
+          data: {
+            orderId: order.id,
+            type: 'INCOME',
+            amount: order.totalAmount,
+            amountBs: order.totalAmountBs,
+            paymentMethod: order.paymentMethod,
+            financeAccountId: updateData.financeAccountId
+          }
         });
       }
       // De-stock (deduct inventory)
@@ -1127,11 +1137,21 @@ app.post('/api/orders/:id/reverse', authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (order.status !== 'COMPLETED') return res.status(400).json({ error: 'Solo se pueden reversar órdenes completadas.' });
 
-    // 1. Subtract money from finance account
+    // 1. Subtract money from finance account and create Reversal movement
     if (order.financeAccountId) {
       await prisma.financeAccount.update({
         where: { id: order.financeAccountId },
         data: { balance: { decrement: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+      });
+      await prisma.orderMovement.create({
+        data: {
+          orderId: order.id,
+          type: 'REVERSAL',
+          amount: -Number(order.totalAmount),
+          amountBs: order.totalAmountBs ? -Number(order.totalAmountBs) : null,
+          paymentMethod: order.paymentMethod,
+          financeAccountId: order.financeAccountId
+        }
       });
     }
 
@@ -1376,15 +1396,17 @@ app.get('/api/closure/orders', authMiddleware, async (req, res) => {
       start = new Date(today.setHours(0,0,0,0));
       end = new Date(today.setHours(23,59,59,999));
     }
-    const orders = await prisma.order.findMany({
+    const movements = await prisma.orderMovement.findMany({
       where: {
-        status: 'COMPLETED',
         createdAt: { gte: start, lte: end }
       },
-      include: { financeAccount: true, items: { include: { product: true, variant: true } } },
+      include: { 
+        order: { include: { items: { include: { product: true, variant: true } } } },
+        financeAccount: true 
+      },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(orders);
+    res.json(movements);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error fetching closure orders' });
@@ -1394,17 +1416,27 @@ app.get('/api/closure/orders', authMiddleware, async (req, res) => {
 // PUT /api/closure/orders
 app.put('/api/closure/orders', authMiddleware, async (req, res) => {
   try {
-    const { updates } = req.body; // [{ id, totalAmount, totalAmountBs, paymentMethod }]
+    const { updates } = req.body; // [{ id, totalAmount, totalAmountBs, paymentMethod, financeAccountId, orderId }]
     for (const u of updates) {
-      await prisma.order.update({
+      const movement = await prisma.orderMovement.findUnique({ where: { id: u.id } });
+      if (!movement) continue;
+      
+      const updateDataMovement = {
+        paymentMethod: u.paymentMethod,
+        financeAccountId: u.financeAccountId ? parseInt(u.financeAccountId) : null
+      };
+
+      await prisma.orderMovement.update({
         where: { id: u.id },
-        data: {
-          totalAmount: parseFloat(u.totalAmount),
-          totalAmountBs: u.totalAmountBs ? parseFloat(u.totalAmountBs) : null,
-          paymentMethod: u.paymentMethod,
-          financeAccountId: u.financeAccountId ? parseInt(u.financeAccountId) : null
-        }
+        data: updateDataMovement
       });
+
+      if (movement.orderId) {
+        await prisma.order.update({
+          where: { id: movement.orderId },
+          data: updateDataMovement
+        });
+      }
     }
     res.json({ success: true });
   } catch (error) {
@@ -1466,32 +1498,40 @@ app.get('/api/closure/summary', authMiddleware, async (req, res) => {
 // GET /api/closure/history
 app.get('/api/closure/history', authMiddleware, async (req, res) => {
   try {
-    const orders = await prisma.order.findMany({
-      where: { status: 'COMPLETED' },
-      include: { financeAccount: true, items: { include: { product: { include: { productLine: true } }, variant: true } } },
+    const movements = await prisma.orderMovement.findMany({
+      include: { 
+        financeAccount: true, 
+        order: { include: { items: { include: { product: { include: { productLine: true } }, variant: true } } } } 
+      },
       orderBy: { createdAt: 'desc' }
     });
 
     const historyMap = {};
 
-    for (const o of orders) {
-      const dateStr = new Date(o.createdAt).toISOString().split('T')[0];
+    for (const m of movements) {
+      const dateStr = new Date(m.createdAt).toISOString().split('T')[0];
       if (!historyMap[dateStr]) {
         historyMap[dateStr] = { date: dateStr, orders: [], bruto: 0, neto: 0, totalCost: 0 };
       }
-      historyMap[dateStr].orders.push(o);
+      historyMap[dateStr].orders.push(m);
 
-      const pm = o.paymentMethod || '';
-      const gross = parseFloat(o.totalAmount || 0);
-      const grossBs = parseFloat(o.totalAmountBs || 0);
-      const rate = parseFloat(o.bcvRate) || 1; // Backend doesn't know the exact current fallback easily here unless fetched, but we use what we have saved
+      const pm = m.paymentMethod || '';
+      const gross = parseFloat(m.amount || 0);
+      const grossBs = parseFloat(m.amountBs || 0);
+      const rate = parseFloat(m.order?.bcvRate) || 1; 
 
       let cost = 0;
-      for (const item of o.items) {
-        let cp = 0;
-        if (item.variant && item.variant.costPrice) cp = parseFloat(item.variant.costPrice);
-        else if (item.product && item.product.costPrice) cp = parseFloat(item.product.costPrice);
-        cost += cp * item.quantity;
+      if (m.order?.items) {
+        for (const item of m.order.items) {
+          let cp = 0;
+          if (item.variant && item.variant.costPrice) cp = parseFloat(item.variant.costPrice);
+          else if (item.product && item.product.costPrice) cp = parseFloat(item.product.costPrice);
+          cost += cp * item.quantity;
+        }
+      }
+
+      if (m.type === 'REVERSAL') {
+        cost = -cost; // Deduct cost on reversal
       }
 
       let orderBrutoDollar = gross;

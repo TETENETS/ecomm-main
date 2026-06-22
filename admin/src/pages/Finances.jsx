@@ -288,7 +288,7 @@ const ClosureDetailsModal = ({ closure, onClose }) => {
             <div className="space-y-3">
               {Object.entries(closure.filteredOrders.reduce((acc, o) => {
                 const accName = o.financeAccount ? `${o.financeAccount.name} (${o.financeAccount.currency})` : (o.paymentMethod || 'No especificado');
-                const amount = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? Number(o.totalAmountBs || 0) : Number(o.totalAmount || 0);
+                const amount = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? Number(o.amountBs || 0) : Number(o.amount || 0);
                 const currency = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? 'Bs' : '$';
                 const key = `${accName}|${currency}`;
                 acc[key] = (acc[key] || 0) + amount;
@@ -309,20 +309,20 @@ const ClosureDetailsModal = ({ closure, onClose }) => {
             <h4 className="font-bold text-gray-700 mb-4 text-xs uppercase tracking-wider">Órdenes del {closure.date}</h4>
             <div className="space-y-3">
               {closure.filteredOrders.map(o => (
-                <div key={o.id} className="bg-white border border-gray-100 rounded-xl p-4 text-sm flex justify-between items-center shadow-sm">
+                <div key={o.id} className={`border border-gray-100 rounded-xl p-4 text-sm flex justify-between items-center shadow-sm ${o.type === 'REVERSAL' ? 'bg-red-50' : 'bg-white'}`}>
                   <div>
-                    <span className="font-bold text-gray-800 text-base">#{o.id} {o.customerName}</span>
+                    <span className="font-bold text-gray-800 text-base">#{o.orderId} {o.order?.customerName || 'Reverso'} {o.type === 'REVERSAL' && <span className="text-red-500 text-xs ml-1">(Reverso)</span>}</span>
                     <span className="text-gray-500 ml-3 bg-gray-100 px-3 py-1 rounded-full font-semibold text-xs">
                       {o.financeAccount ? `${o.financeAccount.name}` : (o.paymentMethod || 'N/A')}
-                      {o.paymentReference && ` - Ref: ${o.paymentReference}`}
+                      {o.order?.paymentReference && ` - Ref: ${o.order.paymentReference}`}
                     </span>
                     <div className="text-gray-500 mt-2 text-xs">
-                      {o.items?.map(i => `${i.quantity}x ${i.product?.name}`).join(', ')}
+                      {o.order?.items?.map(i => `${i.quantity}x ${i.product?.name}`).join(', ')}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-gray-800 text-base">${Number(o.totalAmount).toFixed(2)}</div>
-                    {o.totalAmountBs && <div className="text-gray-400 font-semibold text-xs mt-1">Bs. {Number(o.totalAmountBs).toFixed(2)}</div>}
+                    <div className={`font-bold text-base ${o.type === 'REVERSAL' ? 'text-red-600' : 'text-gray-800'}`}>${Number(o.amount).toFixed(2)}</div>
+                    {o.amountBs && <div className={`font-semibold text-xs mt-1 ${o.type === 'REVERSAL' ? 'text-red-500' : 'text-gray-400'}`}>Bs. {Number(o.amountBs).toFixed(2)}</div>}
                   </div>
                 </div>
               ))}
@@ -526,8 +526,8 @@ const Finances = ({ openNewExpense }) => {
 
     closureOrders.forEach(o => {
       const pm = o.paymentMethod || '';
-      const gross = parseFloat(o.totalAmount || 0);
-      const grossBs = parseFloat(o.totalAmountBs || 0);
+      const gross = parseFloat(o.amount || 0);
+      const grossBs = parseFloat(o.amountBs || 0);
 
       const accId = o.financeAccountId || o.financeAccount?.id;
       const accName = financeAccounts.find(a => a.id === Number(accId))?.name || (o.paymentMethod || 'No especificado');
@@ -539,12 +539,19 @@ const Finances = ({ openNewExpense }) => {
       if (currency === 'Bs') totalBs += grossBs;
 
       let cost = 0;
-      if (o.items) {
-        o.items.forEach(item => {
+      if (o.type === 'INCOME' && o.order?.items) {
+        o.order.items.forEach(item => {
           let cp = 0;
           if (item.variant && item.variant.costPrice) cp = parseFloat(item.variant.costPrice);
           else if (item.product && item.product.costPrice) cp = parseFloat(item.product.costPrice);
           cost += cp * item.quantity;
+        });
+      } else if (o.type === 'REVERSAL' && o.order?.items) {
+        o.order.items.forEach(item => {
+          let cp = 0;
+          if (item.variant && item.variant.costPrice) cp = parseFloat(item.variant.costPrice);
+          else if (item.product && item.product.costPrice) cp = parseFloat(item.product.costPrice);
+          cost -= cp * item.quantity; // Deduct cost on reversal
         });
       }
 
@@ -761,34 +768,20 @@ const Finances = ({ openNewExpense }) => {
                   {closureOrders.filter(o => o.paymentMethod && o.paymentMethod.includes(`(${cierreCurrencyTab})`)).map((o, index) => (
                     <tr key={o.id} className="hover:bg-gray-50">
                       <td className="p-3">
-                        <div className="font-bold">{o.customerName}</div>
-                        <div className="text-xs text-gray-500">#{o.id}</div>
+                        <div className="font-bold">{o.order?.customerName || 'Reverso'}</div>
+                        <div className="text-xs text-gray-500">
+                          #{o.orderId} {o.type === 'REVERSAL' && <span className="text-red-500 font-bold ml-1">(Reverso)</span>}
+                        </div>
                       </td>
                       <td className="p-3">
                         {cierreCurrencyTab === '$' ? (
-                          <input 
-                            type="number" step="0.01"
-                            value={o.totalAmount}
-                            onChange={(e) => {
-                              const newOrders = [...closureOrders];
-                              const orderIndex = closureOrders.findIndex(order => order.id === o.id);
-                              newOrders[orderIndex].totalAmount = e.target.value;
-                              setClosureOrders(newOrders);
-                            }}
-                            className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
-                          />
+                          <span className={`font-bold ${o.type === 'REVERSAL' ? 'text-red-500' : 'text-gray-800'}`}>
+                            {Number(o.amount).toFixed(2)}
+                          </span>
                         ) : (
-                          <input 
-                            type="number" step="0.01"
-                            value={o.totalAmountBs || ''}
-                            onChange={(e) => {
-                              const newOrders = [...closureOrders];
-                              const orderIndex = closureOrders.findIndex(order => order.id === o.id);
-                              newOrders[orderIndex].totalAmountBs = e.target.value;
-                              setClosureOrders(newOrders);
-                            }}
-                            className="w-24 border rounded p-1 text-sm outline-none focus:border-blue-500"
-                          />
+                          <span className={`font-bold ${o.type === 'REVERSAL' ? 'text-red-500' : 'text-gray-800'}`}>
+                            {o.amountBs ? Number(o.amountBs).toFixed(2) : ''}
+                          </span>
                         )}
                       </td>
                       <td className="p-3">
