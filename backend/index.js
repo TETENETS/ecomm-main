@@ -342,7 +342,12 @@ app.delete('/api/product-lines/:id', authMiddleware, async (req, res) => {
 app.get('/api/products', authMiddleware, async (req, res) => {
   try {
     const products = await prisma.product.findMany({
-      include: { variants: true, productLine: true, category: true },
+      include: { 
+        variants: { include: { stockLots: { orderBy: { createdAt: 'desc' } } } }, 
+        productLine: true, 
+        category: true,
+        stockLots: { orderBy: { createdAt: 'desc' } }
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(products);
@@ -477,6 +482,15 @@ app.post('/api/products/add-stock', authMiddleware, async (req, res) => {
       const newStock = oldStock + qty;
       const newCost = ((oldStock * oldCost) + (qty * pPrice)) / newStock;
 
+      await prisma.stockLot.create({
+        data: {
+          productId: parseInt(productId),
+          productVariantId: parseInt(variantId),
+          quantity: qty,
+          purchasePrice: pPrice
+        }
+      });
+
       const updated = await prisma.productVariant.update({
         where: { id: parseInt(variantId) },
         data: {
@@ -494,6 +508,14 @@ app.post('/api/products/add-stock', authMiddleware, async (req, res) => {
       const newStock = oldStock + qty;
       const newCost = ((oldStock * oldCost) + (qty * pPrice)) / newStock;
 
+      await prisma.stockLot.create({
+        data: {
+          productId: parseInt(productId),
+          quantity: qty,
+          purchasePrice: pPrice
+        }
+      });
+
       const updated = await prisma.product.update({
         where: { id: parseInt(productId) },
         data: {
@@ -506,6 +528,115 @@ app.post('/api/products/add-stock', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Error adding stock:', error);
     res.status(500).json({ error: 'Error adding stock' });
+  }
+});
+
+// PUT /api/stock-lots/:id
+app.put('/api/stock-lots/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, purchasePrice } = req.body;
+    const newQty = parseInt(quantity);
+    const newPrice = parseFloat(purchasePrice);
+
+    if (isNaN(newQty) || newQty < 0 || isNaN(newPrice) || newPrice < 0) {
+      return res.status(400).json({ error: 'Invalid quantity or purchase price' });
+    }
+
+    const lot = await prisma.stockLot.findUnique({ where: { id: parseInt(id) } });
+    if (!lot) return res.status(404).json({ error: 'Stock lot not found' });
+
+    const oldQty = lot.quantity;
+    const oldPrice = parseFloat(lot.purchasePrice);
+
+    await prisma.stockLot.update({
+      where: { id: parseInt(id) },
+      data: { quantity: newQty, purchasePrice: newPrice }
+    });
+
+    if (lot.productVariantId) {
+      const variant = await prisma.productVariant.findUnique({ where: { id: lot.productVariantId } });
+      const currentStock = variant.stock;
+      const currentCost = variant.costPrice ? parseFloat(variant.costPrice) : 0;
+      
+      const newStock = currentStock - oldQty + newQty;
+      const currentTotalValue = currentStock * currentCost;
+      const newTotalValue = currentTotalValue - (oldQty * oldPrice) + (newQty * newPrice);
+      const newCost = newStock > 0 ? newTotalValue / newStock : 0;
+
+      await prisma.productVariant.update({
+        where: { id: variant.id },
+        data: { stock: newStock < 0 ? 0 : newStock, costPrice: newCost < 0 ? 0 : newCost }
+      });
+    } else {
+      const product = await prisma.product.findUnique({ where: { id: lot.productId } });
+      const currentStock = product.stock;
+      const currentCost = product.costPrice ? parseFloat(product.costPrice) : 0;
+      
+      const newStock = currentStock - oldQty + newQty;
+      const currentTotalValue = currentStock * currentCost;
+      const newTotalValue = currentTotalValue - (oldQty * oldPrice) + (newQty * newPrice);
+      const newCost = newStock > 0 ? newTotalValue / newStock : 0;
+
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { stock: newStock < 0 ? 0 : newStock, costPrice: newCost < 0 ? 0 : newCost }
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating stock lot:', error);
+    res.status(500).json({ error: 'Error updating stock lot' });
+  }
+});
+
+// DELETE /api/stock-lots/:id
+app.delete('/api/stock-lots/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const lot = await prisma.stockLot.findUnique({ where: { id: parseInt(id) } });
+    if (!lot) return res.status(404).json({ error: 'Stock lot not found' });
+
+    const oldQty = lot.quantity;
+    const oldPrice = parseFloat(lot.purchasePrice);
+
+    await prisma.stockLot.delete({ where: { id: parseInt(id) } });
+
+    if (lot.productVariantId) {
+      const variant = await prisma.productVariant.findUnique({ where: { id: lot.productVariantId } });
+      const currentStock = variant.stock;
+      const currentCost = variant.costPrice ? parseFloat(variant.costPrice) : 0;
+      
+      const newStock = currentStock - oldQty;
+      const currentTotalValue = currentStock * currentCost;
+      const newTotalValue = currentTotalValue - (oldQty * oldPrice);
+      const newCost = newStock > 0 ? newTotalValue / newStock : 0;
+
+      await prisma.productVariant.update({
+        where: { id: variant.id },
+        data: { stock: newStock < 0 ? 0 : newStock, costPrice: newCost < 0 ? 0 : newCost }
+      });
+    } else {
+      const product = await prisma.product.findUnique({ where: { id: lot.productId } });
+      const currentStock = product.stock;
+      const currentCost = product.costPrice ? parseFloat(product.costPrice) : 0;
+      
+      const newStock = currentStock - oldQty;
+      const currentTotalValue = currentStock * currentCost;
+      const newTotalValue = currentTotalValue - (oldQty * oldPrice);
+      const newCost = newStock > 0 ? newTotalValue / newStock : 0;
+
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { stock: newStock < 0 ? 0 : newStock, costPrice: newCost < 0 ? 0 : newCost }
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting stock lot:', error);
+    res.status(500).json({ error: 'Error deleting stock lot' });
   }
 });
 

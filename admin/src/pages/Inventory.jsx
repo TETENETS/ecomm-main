@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronRight, Archive, Loader2, Folder, X, Search } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Edit, Package, ChevronDown, ChevronRight, Archive, Loader2, Folder, X, Search, CheckCircle } from 'lucide-react';
 
 const getImageUrl = (url) => {
   if (!url) return '/placeholder.png';
@@ -48,6 +48,12 @@ const Inventory = () => {
   const [lineDescription, setLineDescription] = useState('');
   const [lineImage, setLineImage] = useState(null);
   const [editingLineId, setEditingLineId] = useState(null);
+
+  // Stock Lots History State
+  const [editingStockLots, setEditingStockLots] = useState([]);
+  const [editingStockLotId, setEditingStockLotId] = useState(null);
+  const [editingStockLotQty, setEditingStockLotQty] = useState('');
+  const [editingStockLotPrice, setEditingStockLotPrice] = useState('');
 
   // Stock Catalog Search State
   const [stockSearch, setStockSearch] = useState('');
@@ -205,6 +211,17 @@ const Inventory = () => {
       existingImageUrl: v.imageUrl
     })) : [];
     
+    let allLots = [...(product.stockLots || [])];
+    if (product.variants) {
+      product.variants.forEach(v => {
+        if (v.stockLots) {
+          allLots = [...allLots, ...v.stockLots.map(lot => ({ ...lot, variantName: v.name }))];
+        }
+      });
+    }
+    allLots.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    setEditingStockLots(allLots);
+    
     setVariants(mappedVariants);
     setShowProductForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -265,6 +282,41 @@ const Inventory = () => {
     setShowProductForm(false);
     setEditingId(null);
     setName(''); setDescription(''); setPrice(''); setCostPrice(''); setStock(''); setImage(null); setExistingImage(''); setVariants([]); setProductLineId(''); setCategoryId('');
+    setEditingStockLots([]); setEditingStockLotId(null);
+  };
+
+  const handleUpdateStockLot = async (lotId) => {
+    if (!editingStockLotQty || !editingStockLotPrice) return alert('Completa todos los campos');
+    setSaving(true);
+    try {
+      await api.put(`/stock-lots/${lotId}`, {
+        quantity: editingStockLotQty,
+        purchasePrice: editingStockLotPrice
+      });
+      setEditingStockLotId(null);
+      fetchData();
+      setShowProductForm(false);
+      alert('Lote actualizado exitosamente. El inventario ha sido recalculado. Vuelve a editar el producto para ver los cambios.');
+    } catch {
+      alert('Error actualizando lote');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteStockLot = async (lotId) => {
+    if (!window.confirm('¿Seguro que deseas eliminar este lote? Esto restará el stock ingresado y recalculará el costo.')) return;
+    setSaving(true);
+    try {
+      await api.delete(`/stock-lots/${lotId}`);
+      fetchData();
+      setShowProductForm(false);
+      alert('Lote eliminado exitosamente. Vuelve a editar el producto para ver los cambios.');
+    } catch {
+      alert('Error eliminando lote');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveStock = async (e) => {
@@ -648,6 +700,51 @@ const Inventory = () => {
                 </div>
               )}
             </div>
+
+            {editingId && editingStockLots.length > 0 && (
+              <div className="bg-gray-50 border border-gray-200 p-6 rounded-2xl">
+                <h3 className="text-lg font-bold text-gray-800 mb-4">Historial de Lotes de Stock</h3>
+                <div className="space-y-3">
+                  <div className="flex px-4 py-2 bg-gray-200/50 rounded-xl text-xs font-bold text-gray-600 uppercase">
+                    <div className="flex-1">Fecha</div>
+                    <div className="flex-1">Variante</div>
+                    <div className="w-24">Cantidad</div>
+                    <div className="w-24">Precio Compra</div>
+                    <div className="w-20 text-right">Acciones</div>
+                  </div>
+                  {editingStockLots.map(lot => (
+                    <div key={lot.id} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm text-sm">
+                      <div className="flex-1 text-gray-500 font-medium">{new Date(lot.createdAt).toLocaleDateString()}</div>
+                      <div className="flex-1 text-gray-700 font-bold">{lot.variantName || '-'}</div>
+                      
+                      {editingStockLotId === lot.id ? (
+                        <>
+                          <div className="w-24">
+                            <input type="number" className="w-full bg-gray-50 p-2 rounded-lg outline-none border border-blue-200" value={editingStockLotQty} onChange={e => setEditingStockLotQty(e.target.value)} />
+                          </div>
+                          <div className="w-24">
+                            <input type="number" step="0.01" className="w-full bg-gray-50 p-2 rounded-lg outline-none border border-blue-200" value={editingStockLotPrice} onChange={e => setEditingStockLotPrice(e.target.value)} />
+                          </div>
+                          <div className="w-20 flex justify-end gap-1">
+                            <button type="button" onClick={() => handleUpdateStockLot(lot.id)} className="p-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"><CheckCircle size={16} /></button>
+                            <button type="button" onClick={() => setEditingStockLotId(null)} className="p-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"><X size={16} /></button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-24 font-bold text-gray-800">{lot.quantity}</div>
+                          <div className="w-24 font-bold text-gray-800">${Number(lot.purchasePrice).toFixed(2)}</div>
+                          <div className="w-20 flex justify-end gap-1">
+                            <button type="button" onClick={() => { setEditingStockLotId(lot.id); setEditingStockLotQty(lot.quantity); setEditingStockLotPrice(lot.purchasePrice); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={16} /></button>
+                            <button type="button" onClick={() => handleDeleteStockLot(lot.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
               <button type="button" onClick={resetForm} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl">Cancelar</button>

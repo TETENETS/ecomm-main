@@ -43,6 +43,7 @@ model Product {
 
   variants      ProductVariant[]
   orderItems    OrderItem[]
+  stockLots     StockLot[]
 }
 
 model ProductVariant {
@@ -58,6 +59,7 @@ model ProductVariant {
   updatedAt DateTime  @updatedAt
 
   orderItems OrderItem[]
+  stockLots  StockLot[]
 }
 
 model Order {
@@ -175,4 +177,16 @@ model DailyClosing {
   orderCount  Int
   ordersInfo  String?  @db.Text // JSON with details of orders
   createdAt   DateTime @default(now())
+}
+
+model StockLot {
+  id               Int             @id @default(autoincrement())
+  productId        Int
+  product          Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productVariantId Int?
+  variant          ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  quantity         Int
+  purchasePrice    Decimal         @db.Decimal(10, 2)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 }
