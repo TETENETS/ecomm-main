@@ -1368,7 +1368,7 @@ app.get('/api/closure/history', authMiddleware, async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       where: { status: 'COMPLETED' },
-      include: { items: { include: { product: { include: { productLine: true } }, variant: true } } },
+      include: { financeAccount: true, items: { include: { product: { include: { productLine: true } }, variant: true } } },
       orderBy: { createdAt: 'desc' }
     });
 

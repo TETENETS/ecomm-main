@@ -813,11 +813,9 @@ const Finances = ({ openNewExpense }) => {
 
       {activeTab === 'HISTORIAL_CIERRES' && (
         <div className="bg-white rounded-xl border shadow-sm w-full flex flex-col h-[600px]">
-          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
-            <div className="flex justify-between items-center">
+          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+            <div className="flex items-center gap-4">
               <h3 className="font-bold text-gray-800">Historial de Cierres</h3>
-              <button onClick={handleExportCSV} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors">
-                Exportar Todo (CSV)
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -857,24 +855,54 @@ const Finances = ({ openNewExpense }) => {
                     {expandedHistoryDate === h.date && (
                       <tr>
                         <td colSpan="4" className="p-0">
-                          <div className="bg-gray-50 p-4 border-b border-gray-100">
-                            <h4 className="font-bold text-gray-700 mb-2">Órdenes del {h.date}</h4>
-                            <div className="space-y-2">
-                              {h.filteredOrders.map(o => (
-                                <div key={o.id} className="bg-white border rounded-lg p-3 text-xs flex justify-between items-center">
-                                  <div>
-                                    <span className="font-bold text-gray-800">#{o.id} {o.customerName}</span>
-                                    <span className="text-gray-500 ml-2">({o.paymentMethod || 'No especificado'})</span>
-                                    <div className="text-gray-500 mt-1">
-                                      {o.items?.map(i => `${i.quantity}x ${i.product?.name}`).join(', ')}
-                                    </div>
-                                  </div>
-                                  <div className="font-bold text-gray-800">
-                                    ${Number(o.totalAmount).toFixed(2)}
-                                  </div>
+                          <div className="bg-gray-50 p-4 border-b border-gray-100 flex flex-col gap-4">
+                            <div className="flex flex-col md:flex-row gap-4">
+                              <div className="flex-1 bg-white p-4 rounded-xl border border-gray-100 shadow-sm self-start sticky top-4">
+                                <h4 className="font-bold text-gray-700 mb-3 text-xs uppercase tracking-wider">Desglose por Cuenta Destino</h4>
+                                <div className="space-y-2">
+                                  {Object.entries(h.filteredOrders.reduce((acc, o) => {
+                                    const accName = o.financeAccount ? `${o.financeAccount.name} (${o.financeAccount.currency})` : (o.paymentMethod || 'No especificado');
+                                    const amount = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? Number(o.totalAmountBs || 0) : Number(o.totalAmount || 0);
+                                    const currency = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? 'Bs' : '$';
+                                    const key = `${accName}|${currency}`;
+                                    acc[key] = (acc[key] || 0) + amount;
+                                    return acc;
+                                  }, {})).map(([key, amount]) => {
+                                    const [name, curr] = key.split('|');
+                                    return (
+                                      <div key={key} className="flex justify-between items-center text-sm">
+                                        <span className="font-semibold text-gray-600">{name}</span>
+                                        <span className="font-bold text-gray-800">{curr === '$' ? '$' : 'Bs. '} {amount.toFixed(2)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                  {h.filteredOrders.length === 0 && <p className="text-xs text-gray-400">Sin datos</p>}
                                 </div>
-                              ))}
-                              {h.filteredOrders.length === 0 && <p className="text-gray-500">No hay órdenes que coincidan con los filtros.</p>}
+                              </div>
+                              <div className="flex-[2]">
+                                <h4 className="font-bold text-gray-700 mb-3 text-xs uppercase tracking-wider">Órdenes del {h.date}</h4>
+                                <div className="space-y-2">
+                                  {h.filteredOrders.map(o => (
+                                    <div key={o.id} className="bg-white border rounded-lg p-3 text-xs flex justify-between items-center">
+                                      <div>
+                                        <span className="font-bold text-gray-800">#{o.id} {o.customerName}</span>
+                                        <span className="text-gray-500 ml-2 bg-gray-100 px-2 py-0.5 rounded-full font-semibold">
+                                          {o.financeAccount ? `${o.financeAccount.name}` : (o.paymentMethod || 'N/A')}
+                                          {o.paymentReference && ` - Ref: ${o.paymentReference}`}
+                                        </span>
+                                        <div className="text-gray-500 mt-1">
+                                          {o.items?.map(i => `${i.quantity}x ${i.product?.name}`).join(', ')}
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="font-bold text-gray-800">${Number(o.totalAmount).toFixed(2)}</div>
+                                        {o.totalAmountBs && <div className="text-gray-400 font-semibold">Bs. {Number(o.totalAmountBs).toFixed(2)}</div>}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {h.filteredOrders.length === 0 && <p className="text-gray-500">No hay órdenes que coincidan con los filtros.</p>}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </td>
