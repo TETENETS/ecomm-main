@@ -270,6 +270,71 @@ const FinanceAccountModal = ({ onClose, onCreated }) => {
   );
 };
 
+// ── Modal: Detalle de Cierre ───────────────────────────────────────────
+const ClosureDetailsModal = ({ closure, onClose }) => {
+  if (!closure) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-black text-gray-800">
+            Detalle del Cierre: {closure.date}
+          </h2>
+          <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
+        </div>
+        <div className="p-6 overflow-y-auto flex flex-col md:flex-row gap-6">
+          <div className="flex-1 bg-white p-5 rounded-xl border border-gray-100 shadow-sm self-start sticky top-0">
+            <h4 className="font-bold text-gray-700 mb-4 text-xs uppercase tracking-wider">Desglose por Cuenta Destino</h4>
+            <div className="space-y-3">
+              {Object.entries(closure.filteredOrders.reduce((acc, o) => {
+                const accName = o.financeAccount ? `${o.financeAccount.name} (${o.financeAccount.currency})` : (o.paymentMethod || 'No especificado');
+                const amount = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? Number(o.totalAmountBs || 0) : Number(o.totalAmount || 0);
+                const currency = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? 'Bs' : '$';
+                const key = `${accName}|${currency}`;
+                acc[key] = (acc[key] || 0) + amount;
+                return acc;
+              }, {})).map(([key, amount]) => {
+                const [name, curr] = key.split('|');
+                return (
+                  <div key={key} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                    <span className="font-semibold text-gray-600">{name}</span>
+                    <span className="font-bold text-gray-800">{curr === '$' ? '$' : 'Bs. '} {amount.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+              {closure.filteredOrders.length === 0 && <p className="text-xs text-gray-400">Sin datos</p>}
+            </div>
+          </div>
+          <div className="flex-[2]">
+            <h4 className="font-bold text-gray-700 mb-4 text-xs uppercase tracking-wider">Órdenes del {closure.date}</h4>
+            <div className="space-y-3">
+              {closure.filteredOrders.map(o => (
+                <div key={o.id} className="bg-white border border-gray-100 rounded-xl p-4 text-sm flex justify-between items-center shadow-sm">
+                  <div>
+                    <span className="font-bold text-gray-800 text-base">#{o.id} {o.customerName}</span>
+                    <span className="text-gray-500 ml-3 bg-gray-100 px-3 py-1 rounded-full font-semibold text-xs">
+                      {o.financeAccount ? `${o.financeAccount.name}` : (o.paymentMethod || 'N/A')}
+                      {o.paymentReference && ` - Ref: ${o.paymentReference}`}
+                    </span>
+                    <div className="text-gray-500 mt-2 text-xs">
+                      {o.items?.map(i => `${i.quantity}x ${i.product?.name}`).join(', ')}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-gray-800 text-base">${Number(o.totalAmount).toFixed(2)}</div>
+                    {o.totalAmountBs && <div className="text-gray-400 font-semibold text-xs mt-1">Bs. {Number(o.totalAmountBs).toFixed(2)}</div>}
+                  </div>
+                </div>
+              ))}
+              {closure.filteredOrders.length === 0 && <p className="text-gray-500 text-sm">No hay órdenes en este cierre.</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Page principal ────────────────────────────────────────────────
 const Finances = ({ openNewExpense }) => {
   const location = useLocation();
@@ -287,7 +352,7 @@ const Finances = ({ openNewExpense }) => {
   const [historyFilterDate, setHistoryFilterDate] = useState('');
   const [historyFilterProduct, setHistoryFilterProduct] = useState('');
   const [historyFilterLine, setHistoryFilterLine] = useState('');
-  const [expandedHistoryDate, setExpandedHistoryDate] = useState(null);
+  const [selectedClosureModal, setSelectedClosureModal] = useState(null);
 
   
   const [closureDate, setClosureDate] = useState(new Date().toISOString().split('T')[0]);
@@ -515,7 +580,7 @@ const Finances = ({ openNewExpense }) => {
       }) || [];
       return { ...h, filteredOrders };
     }).filter(h => {
-      if (historyFilterDate && h.date !== historyFilterDate) return false;
+      if (historyFilterDate && !h.date.startsWith(historyFilterDate)) return false;
       if ((historyFilterProduct || historyFilterLine) && h.filteredOrders.length === 0) return false;
       return true;
     });
@@ -831,8 +896,8 @@ const Finances = ({ openNewExpense }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filtrar por Fecha</label>
-                <input type="date" value={historyFilterDate} onChange={e => setHistoryFilterDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm outline-none" />
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filtrar por Mes</label>
+                <input type="month" value={historyFilterDate} onChange={e => setHistoryFilterDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm outline-none" />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filtrar por Producto</label>
@@ -857,68 +922,12 @@ const Finances = ({ openNewExpense }) => {
               <tbody className="divide-y divide-gray-100">
                 {filteredHistory.map(h => (
                   <React.Fragment key={h.date}>
-                    <tr onClick={() => setExpandedHistoryDate(expandedHistoryDate === h.date ? null : h.date)} className="hover:bg-gray-50 cursor-pointer">
+                    <tr onClick={() => setSelectedClosureModal(h)} className="hover:bg-gray-50 cursor-pointer">
                       <td className="p-4 font-bold text-blue-600">{h.date}</td>
                       <td className="p-4 text-gray-500">{h.filteredOrders.length}</td>
                       <td className="p-4 font-bold text-gray-800">${Number(h.bruto).toFixed(2)}</td>
                       <td className="p-4 font-black text-green-600">${Number(h.neto).toFixed(2)}</td>
                     </tr>
-                    {expandedHistoryDate === h.date && (
-                      <tr>
-                        <td colSpan="4" className="p-0">
-                          <div className="bg-gray-50 p-4 border-b border-gray-100 flex flex-col gap-4">
-                            <div className="flex flex-col md:flex-row gap-4">
-                              <div className="flex-1 bg-white p-4 rounded-xl border border-gray-100 shadow-sm self-start sticky top-4">
-                                <h4 className="font-bold text-gray-700 mb-3 text-xs uppercase tracking-wider">Desglose por Cuenta Destino</h4>
-                                <div className="space-y-2">
-                                  {Object.entries(h.filteredOrders.reduce((acc, o) => {
-                                    const accName = o.financeAccount ? `${o.financeAccount.name} (${o.financeAccount.currency})` : (o.paymentMethod || 'No especificado');
-                                    const amount = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? Number(o.totalAmountBs || 0) : Number(o.totalAmount || 0);
-                                    const currency = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? 'Bs' : '$';
-                                    const key = `${accName}|${currency}`;
-                                    acc[key] = (acc[key] || 0) + amount;
-                                    return acc;
-                                  }, {})).map(([key, amount]) => {
-                                    const [name, curr] = key.split('|');
-                                    return (
-                                      <div key={key} className="flex justify-between items-center text-sm">
-                                        <span className="font-semibold text-gray-600">{name}</span>
-                                        <span className="font-bold text-gray-800">{curr === '$' ? '$' : 'Bs. '} {amount.toFixed(2)}</span>
-                                      </div>
-                                    );
-                                  })}
-                                  {h.filteredOrders.length === 0 && <p className="text-xs text-gray-400">Sin datos</p>}
-                                </div>
-                              </div>
-                              <div className="flex-[2]">
-                                <h4 className="font-bold text-gray-700 mb-3 text-xs uppercase tracking-wider">Órdenes del {h.date}</h4>
-                                <div className="space-y-2">
-                                  {h.filteredOrders.map(o => (
-                                    <div key={o.id} className="bg-white border rounded-lg p-3 text-xs flex justify-between items-center">
-                                      <div>
-                                        <span className="font-bold text-gray-800">#{o.id} {o.customerName}</span>
-                                        <span className="text-gray-500 ml-2 bg-gray-100 px-2 py-0.5 rounded-full font-semibold">
-                                          {o.financeAccount ? `${o.financeAccount.name}` : (o.paymentMethod || 'N/A')}
-                                          {o.paymentReference && ` - Ref: ${o.paymentReference}`}
-                                        </span>
-                                        <div className="text-gray-500 mt-1">
-                                          {o.items?.map(i => `${i.quantity}x ${i.product?.name}`).join(', ')}
-                                        </div>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="font-bold text-gray-800">${Number(o.totalAmount).toFixed(2)}</div>
-                                        {o.totalAmountBs && <div className="text-gray-400 font-semibold">Bs. {Number(o.totalAmountBs).toFixed(2)}</div>}
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {h.filteredOrders.length === 0 && <p className="text-gray-500">No hay órdenes que coincidan con los filtros.</p>}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </React.Fragment>
                 ))}
                 {filteredHistory.length === 0 && (
@@ -1051,6 +1060,8 @@ const Finances = ({ openNewExpense }) => {
       {showTransactionModal && <TransactionModal onClose={() => setShowTransactionModal(false)} onCreated={fetchAll} categories={categories} />}
       {showCategoryModal && <CategoryModal onClose={() => setShowCategoryModal(false)} onCreated={fetchAll} existingCategories={categories} />}
       {showFinanceAccountModal && <FinanceAccountModal onClose={() => setShowFinanceAccountModal(false)} onCreated={fetchAll} />}
+      
+      <ClosureDetailsModal closure={selectedClosureModal} onClose={() => setSelectedClosureModal(null)} />
     </div>
   );
 };
