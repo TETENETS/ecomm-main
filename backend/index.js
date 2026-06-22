@@ -1061,6 +1061,7 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
     const updateData = { status };
     if (paymentMethod) updateData.paymentMethod = paymentMethod;
     if (req.body.financeAccountId) updateData.financeAccountId = parseInt(req.body.financeAccountId);
+    if (req.body.paymentReference) updateData.paymentReference = req.body.paymentReference;
 
     if (status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates)) {
       // Create due dates

@@ -80,6 +80,7 @@ model Order {
   n8nStatus          String      @default("PENDING")
   financeAccountId   Int?
   financeAccount     FinanceAccount? @relation(fields: [financeAccountId], references: [id], onDelete: SetNull)
+  paymentReference   String?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 

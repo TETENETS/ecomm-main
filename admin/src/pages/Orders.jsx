@@ -65,19 +65,24 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(order?.paymentMethod || 'Pago Móvil (Bs)');
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [paymentReference, setPaymentReference] = useState(order?.paymentReference || '');
   const [editDueDates, setEditDueDates] = useState(
     order?.dueDates?.length > 0 ? order.dueDates.map(d => d.dueDate.split('T')[0]) : ['']
   );
   if (!order) return null;
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
   const changeStatus = async (newStatus) => {
-    if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId)) {
+    if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId || !paymentReference)) {
       if (!showPaymentPrompt) {
         setShowPaymentPrompt(true);
         return;
       }
       if (!selectedAccountId) {
         alert('Debe seleccionar una cuenta a la cual acreditar el pago.');
+        return;
+      }
+      if (!paymentReference || paymentReference.length !== 6) {
+        alert('Debe ingresar un número de referencia válido de 6 dígitos.');
         return;
       }
     }
@@ -88,7 +93,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
         newStatus, 
         newStatus === 'PENDING_PAYMENT' ? editDueDates.filter(d => d) : undefined,
         newStatus === 'COMPLETED' ? selectedPaymentMethod : undefined,
-        newStatus === 'COMPLETED' ? selectedAccountId : undefined
+        newStatus === 'COMPLETED' ? selectedAccountId : undefined,
+        newStatus === 'COMPLETED' ? paymentReference : undefined
       );
       setShowPaymentPrompt(false);
     } finally {
@@ -310,15 +316,37 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
                   <select 
                     value={selectedPaymentMethod} 
                     onChange={e => setSelectedPaymentMethod(e.target.value)} 
-                    className="w-full p-2.5 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium text-gray-700"
+                    className="w-full p-2.5 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium text-gray-700 mb-3"
                   >
                     <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
                     <option value="Transferencia ($)">Transferencia ($)</option>
                     <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                     <option value="Efectivo ($)">Efectivo ($)</option>
                   </select>
+
+                  <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Cuenta Destino</label>
+                  <select
+                    value={selectedAccountId}
+                    onChange={e => setSelectedAccountId(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium text-gray-700 mb-3"
+                  >
+                    <option value="">-- Seleccione una cuenta --</option>
+                    {financeAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.name} ({acc.currency})</option>
+                    ))}
+                  </select>
+
+                  <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Referencia de Pago (6 dígitos)</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="Ej: 123456"
+                    value={paymentReference}
+                    onChange={e => setPaymentReference(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full p-2.5 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium text-gray-700 mb-2"
+                  />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-4">
                   <button onClick={() => setShowPaymentPrompt(false)} className="w-1/3 bg-white text-gray-600 border border-gray-300 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
                     Cancelar
                   </button>
@@ -675,11 +703,12 @@ const Orders = ({ openNewOrder }) => {
   };
 
 
-  const handleStatusChange = async (id, status, dueDates, paymentMethod, financeAccountId) => {
+  const handleStatusChange = async (id, status, dueDates, paymentMethod, financeAccountId, paymentReference) => {
     const payload = { status };
     if (dueDates) payload.dueDates = dueDates;
     if (paymentMethod) payload.paymentMethod = paymentMethod;
     if (financeAccountId) payload.financeAccountId = financeAccountId;
+    if (paymentReference) payload.paymentReference = paymentReference;
     const res = await api.patch(`/orders/${id}/status`, payload);
     setOrders(prev => prev.map(o => o.id === id ? res.data : o));
     if (selectedOrder?.id === id) setSelectedOrder(res.data);
