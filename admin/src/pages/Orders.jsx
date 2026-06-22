@@ -71,8 +71,10 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
   );
   if (!order) return null;
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+  const selectedAccount = financeAccounts?.find(acc => acc.id === Number(selectedAccountId));
+  const isEfectivo = selectedPaymentMethod.includes('Efectivo') || (selectedAccount?.name || '').toLowerCase().includes('efectivo');
+
   const changeStatus = async (newStatus) => {
-    const isEfectivo = selectedPaymentMethod.includes('Efectivo');
     if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId || (!isEfectivo && !paymentReference))) {
       if (!showPaymentPrompt) {
         setShowPaymentPrompt(true);
@@ -337,7 +339,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
                     ))}
                   </select>
 
-                  {!selectedPaymentMethod.includes('Efectivo') && (
+                  {!isEfectivo && (
                     <>
                       <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Referencia de Pago (6 dígitos)</label>
                       <input
