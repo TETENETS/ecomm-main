@@ -1281,6 +1281,86 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
   }
 });
 
+// Update an existing order (only allowed if not COMPLETED or CANCELED)
+app.put('/api/orders/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      customerName, customerCedula, customerPhone, customerEmail,
+      locationAddress, paymentMethod, items
+    } = req.body;
+
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingOrder) return res.status(404).json({ error: 'Order not found' });
+    if (existingOrder.status === 'COMPLETED' || existingOrder.status === 'CANCELED') {
+      return res.status(400).json({ error: 'No se pueden editar órdenes que ya están Completadas o Canceladas.' });
+    }
+
+    let totalAmount = 0;
+    const orderItemsData = [];
+
+    for (const item of items) {
+      const product = await prisma.product.findUnique({
+        where: { id: item.productId },
+        include: { variants: true }
+      });
+      if (!product) continue;
+      
+      let price = product.price;
+      let variant = null;
+      if (item.variantId) {
+        variant = product.variants.find(v => v.id === item.variantId);
+        if (variant) price = variant.price;
+      }
+      totalAmount += parseFloat(price) * item.quantity;
+
+      orderItemsData.push({
+        productId: product.id,
+        productVariantId: item.variantId || null,
+        quantity: item.quantity,
+        price
+      });
+    }
+
+    // Since it's not completed, no stock deduction occurs here.
+    // We update the order fields and replace the items.
+    
+    // First, delete existing items
+    await prisma.orderItem.deleteMany({
+      where: { orderId: existingOrder.id }
+    });
+
+    const bcvRate = existingOrder.bcvRate || null;
+    const totalAmountBs = bcvRate ? parseFloat((totalAmount * parseFloat(bcvRate)).toFixed(2)) : null;
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: existingOrder.id },
+      data: {
+        customerName,
+        customerCedula,
+        customerPhone,
+        customerEmail: customerEmail || null,
+        locationAddress: locationAddress || null,
+        paymentMethod: paymentMethod || "Pago Móvil (Bs)",
+        totalAmount,
+        totalAmountBs,
+        items: {
+          create: orderItemsData
+        }
+      },
+      include: { items: { include: { product: true, variant: true } }, dueDates: true }
+    });
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error updating order' });
+  }
+});
+
 // --- CIERRE DE CAJA ---
 
 // GET /api/closure/orders

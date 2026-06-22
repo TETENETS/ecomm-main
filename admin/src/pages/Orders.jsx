@@ -5,7 +5,7 @@ import api from '../api';
 import {
   Package, Phone, MapPin, Eye, CheckCircle, XCircle, Clock,
   ChevronDown, ChevronUp, Loader2, Plus, Search, Filter,
-  ShoppingCart, User, CreditCard, MessageCircle, X, Truck, RotateCcw, Link as LinkIcon
+  ShoppingCart, User, CreditCard, MessageCircle, X, Truck, RotateCcw, Link as LinkIcon, Edit
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -60,7 +60,7 @@ const LocationSelector = ({ lat, lng, onChange }) => {
 };
 
 // ── Modal: detalle de pedido ──────────────────────────────────────
-const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
+const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit }) => {
   const [saving, setSaving] = useState(false);
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(order?.paymentMethod || 'Pago Móvil (Bs)');
@@ -158,6 +158,15 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
             <span className={`px-3 py-1.5 rounded-full text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
               {cfg.label}
             </span>
+            {order.status !== 'COMPLETED' && order.status !== 'CANCELED' && (
+              <button
+                onClick={() => onEdit(order)}
+                className="p-2 bg-yellow-50 text-yellow-600 hover:bg-yellow-100 rounded-xl transition-colors font-bold flex items-center gap-2 text-sm"
+                title="Editar Orden"
+              >
+                <Edit size={16} /> <span className="hidden sm:block">Editar</span>
+              </button>
+            )}
             <button 
               onClick={() => {
                 const url = window.location.origin + '/orders?id=' + order.id;
@@ -442,8 +451,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
   );
 };
 
-// ── Modal: crear pedido manual ───────────────────────────────────
-const NewOrderModal = ({ onClose, onCreated, products }) => {
+// ── Modal: crear o editar pedido ───────────────────────────────────
+const OrderFormModal = ({ onClose, onCreated, products, initialOrder = null }) => {
   const [form, setForm] = useState({ 
     customerName: '', customerCedula: '', 
     phoneCountry: '+58', phoneArea: '414', phoneNum: '', 
@@ -456,6 +465,43 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterLine, setFilterLine] = useState('');
+
+  useEffect(() => {
+    if (initialOrder) {
+      let country = '+58', area = '414', num = '';
+      if (initialOrder.customerPhone) {
+        const phone = initialOrder.customerPhone.replace(/\D/g, '');
+        if (phone.length >= 10) {
+          num = phone.slice(-7);
+          area = phone.slice(-10, -7);
+        } else {
+          num = phone;
+        }
+      }
+      setForm({
+        customerName: initialOrder.customerName || '',
+        customerCedula: initialOrder.customerCedula || '',
+        phoneCountry: country,
+        phoneArea: area,
+        phoneNum: num,
+        customerEmail: initialOrder.customerEmail || '',
+        locationAddress: initialOrder.locationAddress || '',
+        locationMapLat: initialOrder.locationMapLat || '',
+        locationMapLng: initialOrder.locationMapLng || '',
+        status: initialOrder.status || 'PENDING',
+        paymentMethod: initialOrder.paymentMethod || 'Pago Móvil (Bs)'
+      });
+      if (initialOrder.items) {
+        setItems(initialOrder.items.map(it => ({
+          productId: it.productId,
+          variantId: it.productVariantId || null,
+          quantity: it.quantity,
+          p: it.product,
+          variant: it.variant
+        })));
+      }
+    }
+  }, [initialOrder]);
 
   const AREA_CODES = ['414','424','412','416','426','212'];
 
@@ -518,10 +564,14 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
           quantity: parseInt(it.quantity)
         }))
       };
-      await api.post('/orders', payload);
+      if (initialOrder) {
+        await api.put(`/orders/${initialOrder.id}`, payload);
+      } else {
+        await api.post('/orders', payload);
+      }
       onCreated();
       onClose();
-    } catch { alert('Error al crear pedido'); }
+    } catch { alert('Error al guardar pedido'); }
     finally { setSaving(false); }
   };
 
@@ -533,7 +583,10 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
         {/* Panel Izquierdo: Formulario */}
         <div className="w-full md:w-1/2 p-6 h-auto md:max-h-[90vh] md:overflow-y-auto border-b md:border-b-0 md:border-r border-gray-100 flex flex-col">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Plus size={20} className="text-blue-600" /> Nuevo Pedido</h2>
+            <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
+              {initialOrder ? <Plus size={20} className="text-blue-600" /> : <Plus size={20} className="text-blue-600" />} 
+              {initialOrder ? `Editar Pedido #${initialOrder.id}` : 'Nuevo Pedido'}
+            </h2>
             <button onClick={onClose} className="md:hidden p-2 hover:bg-gray-100 rounded-xl"><X size={20} /></button>
           </div>
           
@@ -653,7 +706,7 @@ const NewOrderModal = ({ onClose, onCreated, products }) => {
           <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3">
             <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold flex-1">Cancelar</button>
             <button form="orderForm" type="submit" disabled={saving} className="bg-blue-600 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-60 flex-1 flex justify-center items-center">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : 'Crear Pedido'}
+              {saving ? <Loader2 className="animate-spin mx-auto" /> : (initialOrder ? 'Guardar Cambios' : 'Generar Pedido')}
             </button>
           </div>
         </div>
@@ -726,6 +779,7 @@ const Orders = ({ openNewOrder }) => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [products, setProducts] = useState([]);
   const [financeAccounts, setFinanceAccounts] = useState([]);
@@ -776,6 +830,11 @@ const Orders = ({ openNewOrder }) => {
     const res = await api.patch(`/orders/${id}/status`, payload);
     setOrders(prev => prev.map(o => o.id === id ? res.data : o));
     if (selectedOrder?.id === id) setSelectedOrder(res.data);
+  };
+
+  const handleEditOrder = (order) => {
+    setSelectedOrder(null);
+    setEditingOrder(order);
   };
 
   const filtered = orders.filter(o =>
@@ -913,10 +972,13 @@ const Orders = ({ openNewOrder }) => {
       </div>
 
       {selectedOrder && (
-        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} financeAccounts={financeAccounts} />
+        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} financeAccounts={financeAccounts} onEdit={handleEditOrder} />
       )}
       {showNewOrder && (
-        <NewOrderModal onClose={() => setShowNewOrder(false)} onCreated={fetchData} products={products} />
+        <OrderFormModal onClose={() => setShowNewOrder(false)} onCreated={fetchData} products={products} />
+      )}
+      {editingOrder && (
+        <OrderFormModal onClose={() => setEditingOrder(null)} onCreated={fetchData} products={products} initialOrder={editingOrder} />
       )}
     </div>
   );
