@@ -72,7 +72,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
   if (!order) return null;
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
   const changeStatus = async (newStatus) => {
-    if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId || !paymentReference)) {
+    const isEfectivo = selectedPaymentMethod.includes('Efectivo');
+    if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId || (!isEfectivo && !paymentReference))) {
       if (!showPaymentPrompt) {
         setShowPaymentPrompt(true);
         return;
@@ -81,7 +82,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
         alert('Debe seleccionar una cuenta a la cual acreditar el pago.');
         return;
       }
-      if (!paymentReference || paymentReference.length !== 6) {
+      if (!isEfectivo && (!paymentReference || paymentReference.length !== 6)) {
         alert('Debe ingresar un número de referencia válido de 6 dígitos.');
         return;
       }
@@ -94,7 +95,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
         newStatus === 'PENDING_PAYMENT' ? editDueDates.filter(d => d) : undefined,
         newStatus === 'COMPLETED' ? selectedPaymentMethod : undefined,
         newStatus === 'COMPLETED' ? selectedAccountId : undefined,
-        newStatus === 'COMPLETED' ? paymentReference : undefined
+        newStatus === 'COMPLETED' ? (!isEfectivo ? paymentReference : undefined) : undefined
       );
       setShowPaymentPrompt(false);
     } finally {
@@ -336,15 +337,19 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts }) => {
                     ))}
                   </select>
 
-                  <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Referencia de Pago (6 dígitos)</label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    placeholder="Ej: 123456"
-                    value={paymentReference}
-                    onChange={e => setPaymentReference(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="w-full p-2.5 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium text-gray-700 mb-2"
-                  />
+                  {!selectedPaymentMethod.includes('Efectivo') && (
+                    <>
+                      <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Referencia de Pago (6 dígitos)</label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="Ej: 123456"
+                        value={paymentReference}
+                        onChange={e => setPaymentReference(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="w-full p-2.5 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium text-gray-700 mb-2"
+                      />
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button onClick={() => setShowPaymentPrompt(false)} className="w-1/3 bg-white text-gray-600 border border-gray-300 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
