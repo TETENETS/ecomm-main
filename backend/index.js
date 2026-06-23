@@ -812,9 +812,15 @@ app.post('/api/expenses', authMiddleware, async (req, res) => {
     let bcvRate = 1;
     if (isBs) {
       // Calculate dollar equivalent if Bs
-      const settings = await prisma.setting.findMany();
-      const bcvSetting = settings.find(s => s.key === 'bcv_rate');
-      if (bcvSetting) bcvRate = parseFloat(bcvSetting.value);
+      const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+      if (manualBcv && manualBcv.value && parseFloat(manualBcv.value) > 0) {
+        bcvRate = parseFloat(manualBcv.value);
+      } else {
+        const info = bcvService.obtenerInfo();
+        if (info && info.valor) {
+          bcvRate = info.valor;
+        }
+      }
       amountDollar = parsedAmount / bcvRate;
     }
 
