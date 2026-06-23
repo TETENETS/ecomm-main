@@ -110,7 +110,7 @@ const CategoryModal = ({ onClose, onCreated, existingCategories }) => {
 
 // ── Modal: Gasto/Ingreso ───────────────────────────────────────────
 const TransactionModal = ({ onClose, onCreated, categories, financeAccounts }) => {
-  const [form, setForm] = useState({ title: '', amount: '', categoryId: '', description: '', financeAccountId: '' });
+  const [form, setForm] = useState({ title: '', amount: '', categoryId: '', description: '', financeAccountId: '', currency: '$' });
   const [saving, setSaving] = useState(false);
 
   const expenseCategories = categories.filter(c => c.type === 'EXPENSE');
@@ -128,7 +128,7 @@ const TransactionModal = ({ onClose, onCreated, categories, financeAccounts }) =
 
     try {
       const selectedAccount = financeAccounts?.find(a => a.id === parseInt(form.financeAccountId));
-      const isBs = selectedAccount ? selectedAccount.currency === 'Bs' : false;
+      const isBs = form.financeAccountId ? (selectedAccount ? selectedAccount.currency === 'Bs' : false) : form.currency === 'Bs';
 
       await api.post('/expenses', { ...form, title: finalTitle, isBs });
       onCreated();
@@ -166,17 +166,30 @@ const TransactionModal = ({ onClose, onCreated, categories, financeAccounts }) =
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nota Adicional</label>
-              <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl h-20 outline-none resize-none" />
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Moneda</label>
+              <select value={form.currency} onChange={e => setForm({...form, currency: e.target.value})} disabled={form.financeAccountId !== ''} className="w-full bg-gray-50 border p-3 rounded-xl outline-none disabled:opacity-50">
+                <option value="$">Dólares ($)</option>
+                <option value="Bs">Bolívares (Bs)</option>
+              </select>
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cuenta de Origen</label>
-              <select value={form.financeAccountId} onChange={e => setForm({...form, financeAccountId: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
+              <select value={form.financeAccountId} onChange={e => {
+                const accId = e.target.value;
+                const acc = financeAccounts?.find(a => a.id === parseInt(accId));
+                setForm({...form, financeAccountId: accId, currency: acc ? acc.currency : form.currency});
+              }} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
                 <option value="">-- Sin Cuenta (Solo Registro) --</option>
                 {financeAccounts && financeAccounts.map(fa => (
                   <option key={fa.id} value={fa.id}>{fa.name} ({fa.currency})</option>
                 ))}
               </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nota Adicional</label>
+              <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl h-20 outline-none resize-none" />
             </div>
           </div>
           <button type="submit" disabled={saving} className="w-full bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600">{saving ? 'Guardando...' : 'Registrar Gasto'}</button>
@@ -448,13 +461,14 @@ const Finances = ({ openNewExpense }) => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [eRes, cRes, oRes, iRes, poRes, faRes] = await Promise.all([
+      const [eRes, cRes, oRes, iRes, poRes, faRes, bcvRes] = await Promise.all([
         api.get('/expenses'),
         api.get('/finance-categories'),
         api.get('/orders?status=COMPLETED'),
         api.get('/finances/inventory'),
         api.get('/orders?status=PENDING_PAYMENT'),
-        api.get('/finance-accounts')
+        api.get('/finance-accounts'),
+        api.get('/bcv')
       ]);
       setExpenses(eRes.data);
       setCategories(cRes.data);
@@ -462,6 +476,9 @@ const Finances = ({ openNewExpense }) => {
       setInventory(iRes.data);
       setPendingOrders(poRes.data);
       setFinanceAccounts(faRes.data);
+      if (bcvRes.data && bcvRes.data.valor) {
+        setCurrentBcvRate(bcvRes.data.valor);
+      }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
