@@ -441,6 +441,18 @@ const Finances = ({ openNewExpense }) => {
     }
   };
 
+  const handleDeleteMovement = async (id) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este movimiento del cierre de caja? Esto no afectará la orden en sí, pero la removerá del historial financiero.")) return;
+    try {
+      await api.delete(`/closure/movements/${id}`);
+      setClosureOrders(prev => prev.filter(o => o.id !== id));
+      fetchAll();
+    } catch (e) {
+      console.error(e);
+      alert('Error eliminando movimiento.');
+    }
+  };
+
   const handleDeleteExpense = async (id) => {
     if (!window.confirm('¿Eliminar este gasto?')) return;
     await api.delete(`/expenses/${id}`);
@@ -762,6 +774,7 @@ const Finances = ({ openNewExpense }) => {
                     {cierreCurrencyTab === '$' ? <th className="p-3">Monto ($)</th> : <th className="p-3">Monto (Bs)</th>}
                     <th className="p-3">Método de Pago</th>
                     <th className="p-3">Cuenta Destino</th>
+                    <th className="p-3 text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -825,10 +838,15 @@ const Finances = ({ openNewExpense }) => {
                           ))}
                         </select>
                       </td>
+                      <td className="p-3 text-right">
+                        <button onClick={() => handleDeleteMovement(o.id)} className="text-red-400 hover:text-red-600 p-2 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Eliminar Movimiento">
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {closureOrders.filter(o => o.paymentMethod && o.paymentMethod.includes(`(${cierreCurrencyTab})`)).length === 0 && (
-                    <tr><td colSpan="3" className="p-6 text-center text-gray-400">No hay órdenes en {cierreCurrencyTab} para esta fecha.</td></tr>
+                    <tr><td colSpan="5" className="p-6 text-center text-gray-400">No hay órdenes en {cierreCurrencyTab} para esta fecha.</td></tr>
                   )}
                 </tbody>
               </table>

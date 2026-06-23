@@ -1445,6 +1445,20 @@ app.put('/api/closure/orders', authMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /api/closure/movements/:id
+app.delete('/api/closure/movements/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.orderMovement.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error deleting movement' });
+  }
+});
+
 // GET /api/closure/summary
 app.get('/api/closure/summary', authMiddleware, async (req, res) => {
   try {
