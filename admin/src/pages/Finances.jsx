@@ -109,8 +109,8 @@ const CategoryModal = ({ onClose, onCreated, existingCategories }) => {
 };
 
 // ── Modal: Gasto/Ingreso ───────────────────────────────────────────
-const TransactionModal = ({ onClose, onCreated, categories }) => {
-  const [form, setForm] = useState({ title: '', amount: '', categoryId: '', description: '' });
+const TransactionModal = ({ onClose, onCreated, categories, financeAccounts }) => {
+  const [form, setForm] = useState({ title: '', amount: '', categoryId: '', description: '', financeAccountId: '' });
   const [saving, setSaving] = useState(false);
 
   const expenseCategories = categories.filter(c => c.type === 'EXPENSE');
@@ -127,7 +127,10 @@ const TransactionModal = ({ onClose, onCreated, categories }) => {
     }
 
     try {
-      await api.post('/expenses', { ...form, title: finalTitle });
+      const selectedAccount = financeAccounts?.find(a => a.id === parseInt(form.financeAccountId));
+      const isBs = selectedAccount ? selectedAccount.currency === 'Bs' : false;
+
+      await api.post('/expenses', { ...form, title: finalTitle, isBs });
       onCreated();
       onClose();
     } catch { alert('Error al guardar'); }
@@ -161,9 +164,20 @@ const TransactionModal = ({ onClose, onCreated, categories }) => {
               </select>
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nota Adicional</label>
-            <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl h-20 outline-none resize-none" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nota Adicional</label>
+              <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl h-20 outline-none resize-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cuenta de Origen</label>
+              <select value={form.financeAccountId} onChange={e => setForm({...form, financeAccountId: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
+                <option value="">-- Sin Cuenta (Solo Registro) --</option>
+                {financeAccounts && financeAccounts.map(fa => (
+                  <option key={fa.id} value={fa.id}>{fa.name} ({fa.currency})</option>
+                ))}
+              </select>
+            </div>
           </div>
           <button type="submit" disabled={saving} className="w-full bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600">{saving ? 'Guardando...' : 'Registrar Gasto'}</button>
         </form>
@@ -286,14 +300,31 @@ const ClosureDetailsModal = ({ closure, onClose }) => {
           <div className="flex-1 bg-white p-5 rounded-xl border border-gray-100 shadow-sm self-start sticky top-0">
             <h4 className="font-bold text-gray-700 mb-4 text-xs uppercase tracking-wider">Desglose por Cuenta Destino</h4>
             <div className="space-y-3">
-              {Object.entries(closure.filteredOrders.reduce((acc, o) => {
-                const accName = o.financeAccount ? `${o.financeAccount.name} (${o.financeAccount.currency})` : (o.paymentMethod || 'No especificado');
-                const amount = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? Number(o.amountBs || 0) : Number(o.amount || 0);
-                const currency = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? 'Bs' : '$';
-                const key = `${accName}|${currency}`;
-                acc[key] = (acc[key] || 0) + amount;
+              {Object.entries((() => {
+                const acc = {};
+                closure.filteredOrders.forEach(o => {
+                  const accName = o.financeAccount ? `${o.financeAccount.name} (${o.financeAccount.currency})` : (o.paymentMethod || 'No especificado');
+                  const amount = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? Number(o.amountBs || 0) : Number(o.amount || 0);
+                  const currency = (o.financeAccount?.currency === 'Bs' || (!o.financeAccount && o.paymentMethod?.includes('(Bs)'))) ? 'Bs' : '$';
+                  const key = `${accName}|${currency}`;
+                  acc[key] = (acc[key] || 0) + amount;
+                });
+                if (closure.expenses) {
+                  closure.expenses.forEach(ex => {
+                    const accName = ex.financeAccount ? `${ex.financeAccount.name} (${ex.financeAccount.currency})` : 'General';
+                    const amount = (ex.financeAccount?.currency === 'Bs' || (!ex.financeAccount && ex.amountBs > 0)) ? Number(ex.amountBs || 0) : Number(ex.amount || 0);
+                    const currency = (ex.financeAccount?.currency === 'Bs' || (!ex.financeAccount && ex.amountBs > 0)) ? 'Bs' : '$';
+                    const key = `${accName}|${currency}`;
+                    const type = ex.category?.type || 'EXPENSE';
+                    if (type === 'EXPENSE') {
+                      acc[key] = (acc[key] || 0) - amount;
+                    } else {
+                      acc[key] = (acc[key] || 0) + amount;
+                    }
+                  });
+                }
                 return acc;
-              }, {})).map(([key, amount]) => {
+              })()).map(([key, amount]) => {
                 const [name, curr] = key.split('|');
                 return (
                   <div key={key} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
@@ -302,7 +333,7 @@ const ClosureDetailsModal = ({ closure, onClose }) => {
                   </div>
                 );
               })}
-              {closure.filteredOrders.length === 0 && <p className="text-xs text-gray-400">Sin datos</p>}
+              {closure.filteredOrders.length === 0 && (!closure.expenses || closure.expenses.length === 0) && <p className="text-xs text-gray-400">Sin datos</p>}
             </div>
           </div>
           <div className="flex-[2]">
@@ -328,6 +359,32 @@ const ClosureDetailsModal = ({ closure, onClose }) => {
               ))}
               {closure.filteredOrders.length === 0 && <p className="text-gray-500 text-sm">No hay órdenes en este cierre.</p>}
             </div>
+
+            {closure.expenses && closure.expenses.length > 0 && (
+              <>
+                <h4 className="font-bold text-gray-700 mt-6 mb-4 text-xs uppercase tracking-wider">Gastos / Movimientos Extras</h4>
+                <div className="space-y-3">
+                  {closure.expenses.map(ex => (
+                    <div key={`ex-${ex.id}`} className={`border rounded-xl p-4 text-sm flex justify-between items-center shadow-sm ${ex.category?.type === 'INCOME' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                      <div>
+                        <span className={`font-bold text-base ${ex.category?.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>{ex.title || 'Movimiento'}</span>
+                        <span className={`ml-3 bg-white border px-3 py-1 rounded-full font-semibold text-xs ${ex.category?.type === 'INCOME' ? 'border-green-100 text-green-500' : 'border-red-100 text-gray-500'}`}>
+                          {ex.financeAccount ? `${ex.financeAccount.name}` : 'General'}
+                        </span>
+                        <div className="text-gray-500 mt-2 text-xs">
+                          Categoría: {ex.category?.name || 'Otra'}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`font-bold text-base ${ex.category?.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>
+                          {ex.financeAccount?.currency === 'Bs' || ex.amountBs > 0 ? `Bs. ${Number(ex.amountBs || ex.amount).toFixed(2)}` : `$${Number(ex.amount).toFixed(2)}`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -357,6 +414,7 @@ const Finances = ({ openNewExpense }) => {
   
   const [closureDate, setClosureDate] = useState(new Date().toISOString().split('T')[0]);
   const [closureOrders, setClosureOrders] = useState([]);
+  const [closureExpenses, setClosureExpenses] = useState([]);
   const [closureSummary, setClosureSummary] = useState(null);
   const [closureHistory, setClosureHistory] = useState([]);
   const [savingClosure, setSavingClosure] = useState(false);
@@ -404,7 +462,13 @@ const Finances = ({ openNewExpense }) => {
         api.get('/bcv'),
         api.get('/closure/history')
       ]);
-      setClosureOrders(oRes.data);
+      if (oRes.data.movements) {
+        setClosureOrders(oRes.data.movements);
+        setClosureExpenses(oRes.data.expenses || []);
+      } else {
+        setClosureOrders(oRes.data);
+        setClosureExpenses([]);
+      }
       setClosureSummary(sRes.data);
       setClosureHistory(hRes.data);
       if (bRes.data && bRes.data.valor) {
@@ -576,12 +640,35 @@ const Finances = ({ openNewExpense }) => {
       totalCost += cost;
     });
 
+    closureExpenses.forEach(ex => {
+      const type = ex.category?.type || 'EXPENSE';
+      const gross = parseFloat(ex.amount || 0);
+      const grossBs = parseFloat(ex.amountBs || 0);
+      
+      const accId = ex.financeAccountId || ex.financeAccount?.id;
+      const accName = financeAccounts.find(a => a.id === Number(accId))?.name || 'General';
+      const currency = financeAccounts.find(a => a.id === Number(accId))?.currency || (grossBs > 0 ? 'Bs' : '$');
+      const amount = currency === 'Bs' ? grossBs : gross;
+      
+      if (type === 'EXPENSE') {
+        summary[currency][accName] = (summary[currency][accName] || 0) - amount;
+        if (currency === '$') totalD -= gross;
+        if (currency === 'Bs') totalBs -= grossBs;
+        totalBrutoDollar -= gross; // Assuming expense amount is dollar amount equivalent
+      } else {
+        summary[currency][accName] = (summary[currency][accName] || 0) + amount;
+        if (currency === '$') totalD += gross;
+        if (currency === 'Bs') totalBs += grossBs;
+        totalBrutoDollar += gross;
+      }
+    });
+
     summary.totalD = totalD;
     summary.totalBs = totalBs;
     summary.bruto = totalBrutoDollar;
     summary.neto = totalBrutoDollar - totalCost;
     return summary;
-  }, [closureOrders, financeAccounts, currentBcvRate]);
+  }, [closureOrders, closureExpenses, financeAccounts, currentBcvRate]);
 
   const filteredHistory = React.useMemo(() => {
     return closureHistory.map(h => {
@@ -852,6 +939,58 @@ const Finances = ({ openNewExpense }) => {
               </table>
             </div>
           </div>
+
+          <div className="bg-white rounded-2xl border shadow-sm overflow-hidden mt-6">
+            <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="font-bold text-gray-800">Gastos del Día en {cierreCurrencyTab}</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-white text-gray-400 font-bold uppercase text-[10px] border-b border-gray-100">
+                  <tr>
+                    <th className="p-3">Título / Categoría</th>
+                    <th className="p-3">Monto</th>
+                    <th className="p-3">Cuenta Destino</th>
+                    <th className="p-3 text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {closureExpenses.filter(ex => {
+                    const accId = ex.financeAccountId || ex.financeAccount?.id;
+                    const currency = financeAccounts.find(a => a.id === Number(accId))?.currency || (ex.amountBs > 0 ? 'Bs' : '$');
+                    return currency === cierreCurrencyTab;
+                  }).map((ex, index) => (
+                    <tr key={ex.id} className="hover:bg-gray-50">
+                      <td className="p-3">
+                        <div className="font-bold text-red-500">{ex.title || 'Gasto'}</div>
+                        <div className="text-xs text-gray-500">{ex.category?.name || 'General'}</div>
+                      </td>
+                      <td className="p-3">
+                        <span className="font-bold text-red-500">
+                          {cierreCurrencyTab === '$' ? `$${Number(ex.amount).toFixed(2)}` : `Bs. ${Number(ex.amountBs).toFixed(2)}`}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {ex.financeAccount?.name || 'General'}
+                      </td>
+                      <td className="p-3 text-right">
+                        <button onClick={() => handleDeleteExpense(ex.id)} className="text-red-400 hover:text-red-600 p-2 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Eliminar Gasto">
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {closureExpenses.filter(ex => {
+                    const accId = ex.financeAccountId || ex.financeAccount?.id;
+                    const currency = financeAccounts.find(a => a.id === Number(accId))?.currency || (ex.amountBs > 0 ? 'Bs' : '$');
+                    return currency === cierreCurrencyTab;
+                  }).length === 0 && (
+                    <tr><td colSpan="4" className="p-6 text-center text-gray-400">No hay gastos en {cierreCurrencyTab} para esta fecha.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl border shadow-sm w-full h-fit">
@@ -1068,7 +1207,7 @@ const Finances = ({ openNewExpense }) => {
         </div>
       )}
 
-      {showTransactionModal && <TransactionModal onClose={() => setShowTransactionModal(false)} onCreated={fetchAll} categories={categories} />}
+      {showTransactionModal && <TransactionModal onClose={() => setShowTransactionModal(false)} onCreated={fetchAll} categories={categories} financeAccounts={financeAccounts} />}
       {showCategoryModal && <CategoryModal onClose={() => setShowCategoryModal(false)} onCreated={fetchAll} existingCategories={categories} />}
       {showFinanceAccountModal && <FinanceAccountModal onClose={() => setShowFinanceAccountModal(false)} onCreated={fetchAll} />}
       

@@ -121,17 +121,20 @@ model FinanceCategory {
 }
 
 model Expense {
-  id          Int              @id @default(autoincrement())
-  categoryId  Int?
-  category    FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  id               Int              @id @default(autoincrement())
+  categoryId       Int?
+  category         FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   // Legacy category string to avoid breaking old data completely
-  legacyCategory String?         @default("GENERAL") 
-  title       String
-  amount      Decimal          @db.Decimal(10, 2)
-  date        DateTime         @default(now())
-  description String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  legacyCategory   String?          @default("GENERAL") 
+  title            String
+  amount           Decimal          @db.Decimal(10, 2)
+  amountBs         Decimal?         @db.Decimal(10, 2)
+  financeAccountId Int?
+  financeAccount   FinanceAccount?  @relation(fields: [financeAccountId], references: [id], onDelete: SetNull)
+  date             DateTime         @default(now())
+  description      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }
 
 model AccountTransaction {
@@ -171,6 +174,7 @@ model FinanceAccount {
   
   orders    Order[]
   movements OrderMovement[]
+  expenses  Expense[]
 }
 
 model DailyClosing {

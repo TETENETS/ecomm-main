@@ -785,7 +785,7 @@ app.get('/api/expenses', authMiddleware, async (req, res) => {
 
 app.post('/api/expenses', authMiddleware, async (req, res) => {
   try {
-    let { title, amount, categoryId, description } = req.body;
+    let { title, amount, categoryId, description, financeAccountId, isBs } = req.body;
     
     let catName = 'Sin Categoría';
     if (categoryId) {
@@ -798,12 +798,41 @@ app.post('/api/expenses', authMiddleware, async (req, res) => {
       description = catName;
     }
 
+    const parsedAmount = parseFloat(amount);
+    let amountDollar = isBs ? 0 : parsedAmount;
+    let amountBs = isBs ? parsedAmount : null;
+
+    let bcvRate = 1;
+    if (isBs) {
+      // Calculate dollar equivalent if Bs
+      const settings = await prisma.setting.findMany();
+      const bcvSetting = settings.find(s => s.key === 'bcv_rate');
+      if (bcvSetting) bcvRate = parseFloat(bcvSetting.value);
+      amountDollar = parsedAmount / bcvRate;
+    }
+
     const expense = await prisma.expense.create({
-      data: { title, amount: parseFloat(amount), categoryId: categoryId ? parseInt(categoryId) : null, description },
+      data: { 
+        title, 
+        amount: amountDollar, 
+        amountBs: amountBs,
+        categoryId: categoryId ? parseInt(categoryId) : null, 
+        description,
+        financeAccountId: financeAccountId ? parseInt(financeAccountId) : null
+      },
       include: { category: true }
     });
+
+    if (financeAccountId) {
+      await prisma.financeAccount.update({
+        where: { id: parseInt(financeAccountId) },
+        data: { balance: { decrement: parsedAmount } }
+      });
+    }
+
     res.status(201).json(expense);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Error creating expense' });
   }
 });
@@ -1406,7 +1435,19 @@ app.get('/api/closure/orders', authMiddleware, async (req, res) => {
       },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(movements);
+
+    const expenses = await prisma.expense.findMany({
+      where: {
+        createdAt: { gte: start, lte: end }
+      },
+      include: {
+        category: true,
+        financeAccount: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ movements, expenses });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error fetching closure orders' });
@@ -1525,7 +1566,7 @@ app.get('/api/closure/history', authMiddleware, async (req, res) => {
     for (const m of movements) {
       const dateStr = new Date(m.createdAt).toISOString().split('T')[0];
       if (!historyMap[dateStr]) {
-        historyMap[dateStr] = { date: dateStr, orders: [], bruto: 0, neto: 0, totalCost: 0 };
+        historyMap[dateStr] = { date: dateStr, orders: [], expenses: [], bruto: 0, neto: 0, totalCost: 0 };
       }
       historyMap[dateStr].orders.push(m);
 
@@ -1556,6 +1597,29 @@ app.get('/api/closure/history', authMiddleware, async (req, res) => {
       historyMap[dateStr].bruto += orderBrutoDollar;
       historyMap[dateStr].totalCost += cost;
       historyMap[dateStr].neto += (orderBrutoDollar - cost);
+    }
+
+    const allExpenses = await prisma.expense.findMany({
+      include: { category: true, financeAccount: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    for (const ex of allExpenses) {
+      const dateStr = new Date(ex.createdAt).toISOString().split('T')[0];
+      if (!historyMap[dateStr]) {
+        historyMap[dateStr] = { date: dateStr, orders: [], expenses: [], bruto: 0, neto: 0, totalCost: 0 };
+      }
+      historyMap[dateStr].expenses.push(ex);
+
+      const exAmount = parseFloat(ex.amount || 0);
+      const type = ex.category?.type || 'EXPENSE';
+      
+      if (type === 'EXPENSE') {
+        historyMap[dateStr].neto -= exAmount;
+      } else {
+        historyMap[dateStr].neto += exAmount;
+        historyMap[dateStr].bruto += exAmount; // Ingresos también suman al bruto? Sí, o solo al neto. Lo sumaré a ambos.
+      }
     }
 
     const historyList = Object.values(historyMap).sort((a, b) => new Date(b.date) - new Date(a.date));
