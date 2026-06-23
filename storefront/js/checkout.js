@@ -157,7 +157,21 @@ function renderCheckoutOrder() {
             priceHtml = `$${itemTotal.toFixed(2)}<br><small>Bs. ${totalBs.toFixed(2)}</small>`;
         }
         
-        list.innerHTML += `<li><span>${item.productName} x ${item.quantity}</span> <span style="text-align: right;">${priceHtml}</span></li>`;
+        list.innerHTML += `
+            <li style="display: flex; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #f0f0f0; padding-bottom: 15px; line-height: 1.2;">
+                <img src="${item.imageUrl || 'img/bg-img/bg-1.jpg'}" alt="${item.productName}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 5px; margin-right: 15px;">
+                <div style="flex-grow: 1; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="max-width: 60%;">
+                        <span style="font-weight: 600; display: block; margin-bottom: 4px; font-size: 14px;">${item.productName}</span>
+                        ${item.variantName ? `<span style="font-size: 12px; color: #888; display: block; margin-bottom: 2px;">Var: ${item.variantName}</span>` : ''}
+                        <span style="font-size: 12px; color: #888; display: block;">Cant: ${item.quantity}</span>
+                    </div>
+                    <div style="text-align: right; font-size: 14px;">
+                        ${priceHtml}
+                    </div>
+                </div>
+            </li>
+        `;
     });
 
     const totalBsAll = total * window.tasaBCV;
