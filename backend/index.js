@@ -774,7 +774,7 @@ app.delete('/api/finance-categories/:id', authMiddleware, async (req, res) => {
 app.get('/api/expenses', authMiddleware, async (req, res) => {
   try {
     const expenses = await prisma.expense.findMany({
-      include: { category: true },
+      include: { category: true, financeAccount: true },
       orderBy: { date: 'desc' }
     });
     res.json(expenses);

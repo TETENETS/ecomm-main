@@ -828,7 +828,14 @@ const Finances = ({ openNewExpense }) => {
                 <td className="p-4 px-6 font-semibold text-gray-800">{e.title}</td>
                 <td className="p-4"><span className="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md">{e.category ? e.category.name : e.legacyCategory}</span></td>
                 <td className="p-4 text-gray-500 text-xs font-medium">{new Date(e.createdAt).toLocaleDateString()}</td>
-                <td className="p-4 font-black text-red-600">-${Number(e.amount).toFixed(2)}</td>
+                <td className="p-4 font-black text-red-600">
+                  {(() => {
+                    const isBs = e.financeAccount?.currency === 'Bs' || (e.amountBs && e.amountBs > 0);
+                    const valBs = Number(e.amountBs || (e.amount * currentBcvRate)).toFixed(2);
+                    const valD = Number(e.amount || (e.amountBs / currentBcvRate)).toFixed(2);
+                    return `-${isBs ? `Bs. ${valBs} ($${valD})` : `$${valD} (Bs. ${valBs})`}`;
+                  })()}
+                </td>
                 <td className="p-4 text-center">
                   <button onClick={() => handleDeleteExpense(e.id)} className="p-1.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-md opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
                 </td>
