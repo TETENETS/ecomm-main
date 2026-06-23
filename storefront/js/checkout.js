@@ -1,4 +1,4 @@
-import { API_URL, fetchBCV, renderHeader, renderCartArea, renderFooter, updateCartUI, getCart } from './components.js';
+import { API_URL, fetchBCV, renderHeader, renderCartArea, renderFooter, updateCartUI, getCart, saveCart } from './components.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const app = document.getElementById('app');
@@ -144,7 +144,7 @@ function renderCheckoutOrder() {
     list.innerHTML = `<li><span>Producto</span> <span>Total</span></li>`;
     
     let total = 0;
-    cart.forEach(item => {
+    cart.forEach((item, index) => {
         const itemPrice = Number(item.price) || 0;
         const itemTotal = itemPrice * item.quantity;
         total += itemTotal;
@@ -164,7 +164,11 @@ function renderCheckoutOrder() {
                     <div style="max-width: 60%;">
                         <span style="font-weight: 600; display: block; margin-bottom: 4px; font-size: 14px;">${item.productName}</span>
                         ${item.variantName ? `<span style="font-size: 12px; color: #888; display: block; margin-bottom: 2px;">Var: ${item.variantName}</span>` : ''}
-                        <span style="font-size: 12px; color: #888; display: block;">Cant: ${item.quantity}</span>
+                        <div style="display: flex; align-items: center; margin-top: 5px;">
+                            <button type="button" onclick="window.updateCheckoutQuantity(${index}, -1)" style="border: 1px solid #ccc; background: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 3px; font-weight: bold; font-size: 14px; line-height: 1; padding: 0;">-</button>
+                            <span style="font-size: 12px; margin: 0 10px; font-weight: bold; color: #333;">${item.quantity}</span>
+                            <button type="button" onclick="window.updateCheckoutQuantity(${index}, 1)" style="border: 1px solid #ccc; background: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 3px; font-weight: bold; font-size: 14px; line-height: 1; padding: 0;">+</button>
+                        </div>
                     </div>
                     <div style="text-align: right; font-size: 14px;">
                         ${priceHtml}
@@ -319,3 +323,15 @@ function initMapLogic() {
         }
     });
 }
+
+window.updateCheckoutQuantity = function(index, change) {
+    const cart = getCart();
+    if (cart[index]) {
+        cart[index].quantity += change;
+        if (cart[index].quantity < 1) {
+            cart.splice(index, 1);
+        }
+        saveCart(cart);
+        renderCheckoutOrder();
+    }
+};
