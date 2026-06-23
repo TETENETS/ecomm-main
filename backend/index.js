@@ -1457,7 +1457,7 @@ app.get('/api/closure/orders', authMiddleware, async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    const expenses = await prisma.expense.findMany({
+    const expensesRaw = await prisma.expense.findMany({
       where: {
         createdAt: { gte: start, lte: end }
       },
@@ -1467,6 +1467,11 @@ app.get('/api/closure/orders', authMiddleware, async (req, res) => {
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    const expenses = expensesRaw.filter(ex => 
+      ex.category?.name !== 'Transferencia Saliente' && 
+      ex.category?.name !== 'Transferencia Entrante'
+    );
 
     res.json({ movements, expenses });
   } catch (error) {
@@ -1620,10 +1625,15 @@ app.get('/api/closure/history', authMiddleware, async (req, res) => {
       historyMap[dateStr].neto += (orderBrutoDollar - cost);
     }
 
-    const allExpenses = await prisma.expense.findMany({
+    const allExpensesRaw = await prisma.expense.findMany({
       include: { category: true, financeAccount: true },
       orderBy: { createdAt: 'desc' }
     });
+
+    const allExpenses = allExpensesRaw.filter(ex => 
+      ex.category?.name !== 'Transferencia Saliente' && 
+      ex.category?.name !== 'Transferencia Entrante'
+    );
 
     for (const ex of allExpenses) {
       const dateStr = new Date(ex.createdAt).toISOString().split('T')[0];
