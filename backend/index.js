@@ -793,6 +793,13 @@ app.post('/api/expenses', authMiddleware, async (req, res) => {
       if (cat) catName = cat.name;
     }
 
+    if (financeAccountId) {
+      const accountInfo = await prisma.financeAccount.findUnique({ where: { id: parseInt(financeAccountId) } });
+      if (accountInfo) {
+        isBs = accountInfo.currency === 'Bs';
+      }
+    }
+
     // Default description to category name if missing
     if (!description || description.trim() === '') {
       description = catName;
@@ -1092,16 +1099,20 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
     if (oldOrder.status !== 'COMPLETED' && status === 'COMPLETED') {
       // Add money to finance account and create OrderMovement
       if (updateData.financeAccountId) {
+        const accountInfo = await prisma.financeAccount.findUnique({ where: { id: updateData.financeAccountId } });
+        const isBsAccount = accountInfo && accountInfo.currency === 'Bs';
+        const incrementAmount = isBsAccount ? Number(order.totalAmountBs) : Number(order.totalAmount);
+
         await prisma.financeAccount.update({
           where: { id: updateData.financeAccountId },
-          data: { balance: { increment: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+          data: { balance: { increment: incrementAmount } }
         });
         await prisma.orderMovement.create({
           data: {
             orderId: order.id,
             type: 'INCOME',
-            amount: order.totalAmount,
-            amountBs: order.totalAmountBs,
+            amount: isBsAccount ? 0 : order.totalAmount,
+            amountBs: isBsAccount ? order.totalAmountBs : 0,
             paymentMethod: order.paymentMethod,
             financeAccountId: updateData.financeAccountId
           }
@@ -1168,16 +1179,20 @@ app.post('/api/orders/:id/reverse', authMiddleware, async (req, res) => {
 
     // 1. Subtract money from finance account and create Reversal movement
     if (order.financeAccountId) {
+      const accountInfo = await prisma.financeAccount.findUnique({ where: { id: order.financeAccountId } });
+      const isBsAccount = accountInfo && accountInfo.currency === 'Bs';
+      const decrementAmount = isBsAccount ? Number(order.totalAmountBs) : Number(order.totalAmount);
+
       await prisma.financeAccount.update({
         where: { id: order.financeAccountId },
-        data: { balance: { decrement: (order.paymentMethod && order.paymentMethod.includes('(Bs)')) ? Number(order.totalAmountBs) : Number(order.totalAmount) } }
+        data: { balance: { decrement: decrementAmount } }
       });
       await prisma.orderMovement.create({
         data: {
           orderId: order.id,
           type: 'REVERSAL',
-          amount: -Number(order.totalAmount),
-          amountBs: order.totalAmountBs ? -Number(order.totalAmountBs) : null,
+          amount: isBsAccount ? 0 : -Number(order.totalAmount),
+          amountBs: isBsAccount ? -Number(order.totalAmountBs) : 0,
           paymentMethod: order.paymentMethod,
           financeAccountId: order.financeAccountId
         }
@@ -1749,6 +1764,32 @@ app.post('/api/finance-accounts', authMiddleware, async (req, res) => {
     res.json(account);
   } catch (error) {
     res.status(500).json({ error: 'Error creating account' });
+  }
+});
+
+app.put('/api/finance-accounts/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, currency } = req.body;
+    const account = await prisma.financeAccount.update({
+      where: { id: parseInt(id) },
+      data: { name, currency }
+    });
+    res.json(account);
+  } catch (error) {
+    res.status(500).json({ error: 'Error updating account' });
+  }
+});
+
+app.delete('/api/finance-accounts/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.financeAccount.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ message: 'Account deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting account' });
   }
 });
 

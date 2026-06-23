@@ -241,18 +241,24 @@ const AccountModal = ({ onClose, onCreated }) => {
 };
 
 // ── Modal: Finance Account ───────────────────────────────────────────
-const FinanceAccountModal = ({ onClose, onCreated }) => {
-  const [form, setForm] = useState({ name: '', currency: 'Bs' });
+const FinanceAccountModal = ({ onClose, onCreated, accountToEdit = null }) => {
+  const [form, setForm] = useState(
+    accountToEdit ? { name: accountToEdit.name, currency: accountToEdit.currency } : { name: '', currency: 'Bs' }
+  );
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post('/finance-accounts', form);
+      if (accountToEdit) {
+        await api.put(`/finance-accounts/${accountToEdit.id}`, form);
+      } else {
+        await api.post('/finance-accounts', form);
+      }
       onCreated();
       onClose();
-    } catch { alert('Error al crear cuenta'); }
+    } catch { alert('Error al guardar cuenta'); }
     finally { setSaving(false); }
   };
 
@@ -261,7 +267,7 @@ const FinanceAccountModal = ({ onClose, onCreated }) => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-            <Briefcase size={20} className="text-blue-500" /> Nueva Cuenta Bancaria
+            <Briefcase size={20} className="text-blue-500" /> {accountToEdit ? 'Editar Cuenta Bancaria' : 'Nueva Cuenta Bancaria'}
           </h2>
           <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
         </div>
@@ -277,7 +283,7 @@ const FinanceAccountModal = ({ onClose, onCreated }) => {
               <option value="$">Dólares ($)</option>
             </select>
           </div>
-          <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700">{saving ? 'Guardando...' : 'Crear Cuenta'}</button>
+          <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700">{saving ? 'Guardando...' : (accountToEdit ? 'Actualizar Cuenta' : 'Crear Cuenta')}</button>
         </form>
       </div>
     </div>
@@ -285,7 +291,7 @@ const FinanceAccountModal = ({ onClose, onCreated }) => {
 };
 
 // ── Modal: Detalle de Cierre ───────────────────────────────────────────
-const ClosureDetailsModal = ({ closure, onClose }) => {
+const ClosureDetailsModal = ({ closure, onClose, bcvRate = 1 }) => {
   if (!closure) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
@@ -377,7 +383,12 @@ const ClosureDetailsModal = ({ closure, onClose }) => {
                       </div>
                       <div className="text-right">
                         <div className={`font-bold text-base ${ex.category?.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>
-                          {ex.financeAccount?.currency === 'Bs' || ex.amountBs > 0 ? `Bs. ${Number(ex.amountBs || ex.amount).toFixed(2)}` : `$${Number(ex.amount).toFixed(2)}`}
+                          {(() => {
+                            const isBs = ex.financeAccount?.currency === 'Bs' || (ex.amountBs && ex.amountBs > 0);
+                            const valBs = Number(ex.amountBs || (ex.amount * bcvRate)).toFixed(2);
+                            const valD = Number(ex.amount || (ex.amountBs / bcvRate)).toFixed(2);
+                            return isBs ? `Bs. ${valBs} ($${valD})` : `$${valD} (Bs. ${valBs})`;
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -422,6 +433,7 @@ const Finances = ({ openNewExpense }) => {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showFinanceAccountModal, setShowFinanceAccountModal] = useState(false);
+  const [accountToEdit, setAccountToEdit] = useState(null);
   const [currentBcvRate, setCurrentBcvRate] = useState(1);
 
   const [loading, setLoading] = useState(true);
@@ -521,6 +533,16 @@ const Finances = ({ openNewExpense }) => {
     if (!window.confirm('¿Eliminar este gasto?')) return;
     await api.delete(`/expenses/${id}`);
     fetchAll();
+  };
+
+  const handleDeleteFinanceAccount = async (id) => {
+    if (!window.confirm('¿Seguro que deseas eliminar esta cuenta bancaria? Sus registros asociados quedarán sin cuenta vinculada.')) return;
+    try {
+      await api.delete(`/finance-accounts/${id}`);
+      fetchAll();
+    } catch {
+      alert('Error eliminando cuenta');
+    }
   };
 
   const handleUpdateAccountStatus = async (id, currentStatus) => {
@@ -703,7 +725,7 @@ const Finances = ({ openNewExpense }) => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Finanzas</h1>
         <div className="flex gap-3">
-          <button onClick={() => setShowFinanceAccountModal(true)} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-gray-200 shadow-sm transition-colors">
+          <button onClick={() => { setAccountToEdit(null); setShowFinanceAccountModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-gray-200 shadow-sm transition-colors">
             <Briefcase size={18} className="mr-1"/> Cuenta
           </button>
           <button onClick={handleExportCSV} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center hover:bg-gray-200 shadow-sm transition-colors">
@@ -1093,7 +1115,7 @@ const Finances = ({ openNewExpense }) => {
         <div className="bg-white rounded-xl border shadow-sm w-full flex flex-col h-[600px]">
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
             <h3 className="font-bold text-gray-800 flex items-center gap-2"><Briefcase size={18} className="text-blue-500"/> Cuentas Bancarias</h3>
-            <button onClick={() => setShowFinanceAccountModal(true)} className="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
+            <button onClick={() => { setAccountToEdit(null); setShowFinanceAccountModal(true); }} className="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
               Nueva Cuenta
             </button>
           </div>
@@ -1105,16 +1127,27 @@ const Finances = ({ openNewExpense }) => {
                   <th className="p-4">Nombre de la Cuenta</th>
                   <th className="p-4">Moneda</th>
                   <th className="p-4">Balance Actual</th>
+                  <th className="p-4 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {financeAccounts.map(fa => (
-                  <tr key={fa.id} className="hover:bg-gray-50">
+                  <tr key={fa.id} className="hover:bg-gray-50 group transition-colors">
                     <td className="p-4 text-gray-500 text-xs">#{fa.id}</td>
                     <td className="p-4 font-bold">{fa.name}</td>
                     <td className="p-4"><span className={`px-2 py-1 rounded-lg text-xs font-bold ${fa.currency === '$' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{fa.currency}</span></td>
                     <td className={`p-4 font-black ${fa.currency === '$' ? 'text-green-600' : 'text-blue-600'}`}>
                       {fa.currency === '$' ? '$' : 'Bs. '}{Number(fa.balance).toFixed(2)}
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button onClick={() => { setAccountToEdit(fa); setShowFinanceAccountModal(true); }} className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-md">
+                          <Edit size={16} />
+                        </button>
+                        <button onClick={() => handleDeleteFinanceAccount(fa.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1209,9 +1242,9 @@ const Finances = ({ openNewExpense }) => {
 
       {showTransactionModal && <TransactionModal onClose={() => setShowTransactionModal(false)} onCreated={fetchAll} categories={categories} financeAccounts={financeAccounts} />}
       {showCategoryModal && <CategoryModal onClose={() => setShowCategoryModal(false)} onCreated={fetchAll} existingCategories={categories} />}
-      {showFinanceAccountModal && <FinanceAccountModal onClose={() => setShowFinanceAccountModal(false)} onCreated={fetchAll} />}
+      {showFinanceAccountModal && <FinanceAccountModal onClose={() => setShowFinanceAccountModal(false)} onCreated={fetchAll} accountToEdit={accountToEdit} />}
       
-      <ClosureDetailsModal closure={selectedClosureModal} onClose={() => setSelectedClosureModal(null)} />
+      <ClosureDetailsModal closure={selectedClosureModal} onClose={() => setSelectedClosureModal(null)} bcvRate={currentBcvRate} />
     </div>
   );
 };
