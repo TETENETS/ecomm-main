@@ -1754,6 +1754,100 @@ app.get('/admin/*', (req, res) => {
 });
 
 // --- FINANCE ACCOUNTS ---
+app.post('/api/finance-accounts/transfer', authMiddleware, async (req, res) => {
+  try {
+    const { fromAccountId, toAccountId, amount } = req.body;
+    
+    if (!fromAccountId || !toAccountId || !amount) {
+      return res.status(400).json({ error: 'Faltan datos para la transferencia' });
+    }
+
+    const fromAccount = await prisma.financeAccount.findUnique({ where: { id: parseInt(fromAccountId) } });
+    const toAccount = await prisma.financeAccount.findUnique({ where: { id: parseInt(toAccountId) } });
+
+    if (!fromAccount || !toAccount) {
+      return res.status(404).json({ error: 'Cuentas no encontradas' });
+    }
+
+    const parsedAmount = parseFloat(amount);
+
+    // Get BCV rate
+    let bcvRate = 1;
+    const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+    if (manualBcv && manualBcv.value && parseFloat(manualBcv.value) > 0) {
+      bcvRate = parseFloat(manualBcv.value);
+    } else {
+      const info = bcvService.obtenerInfo();
+      if (info && info.valor) bcvRate = info.valor;
+    }
+
+    // Amount conversions
+    let sourceDollarAmount = parsedAmount;
+    if (fromAccount.currency === 'Bs') {
+      sourceDollarAmount = parsedAmount / bcvRate;
+    }
+
+    let targetAmount = parsedAmount;
+    if (fromAccount.currency === '$' && toAccount.currency === 'Bs') {
+      targetAmount = parsedAmount * bcvRate;
+    } else if (fromAccount.currency === 'Bs' && toAccount.currency === '$') {
+      targetAmount = parsedAmount / bcvRate;
+    }
+
+    // Find or create categories
+    let expenseCat = await prisma.financeCategory.findFirst({ where: { name: 'Transferencia Saliente' } });
+    if (!expenseCat) {
+      expenseCat = await prisma.financeCategory.create({ data: { name: 'Transferencia Saliente', type: 'EXPENSE', color: '#EF4444' } });
+    }
+
+    let incomeCat = await prisma.financeCategory.findFirst({ where: { name: 'Transferencia Entrante' } });
+    if (!incomeCat) {
+      incomeCat = await prisma.financeCategory.create({ data: { name: 'Transferencia Entrante', type: 'INCOME', color: '#10B981' } });
+    }
+
+    // Create Expense for source (Transferencia Saliente)
+    await prisma.expense.create({
+      data: {
+        title: `Transferencia a ${toAccount.name}`,
+        amount: sourceDollarAmount,
+        amountBs: sourceDollarAmount * bcvRate,
+        categoryId: expenseCat.id,
+        description: 'Transferencia entre cuentas',
+        financeAccountId: fromAccount.id
+      }
+    });
+
+    // Create Expense (Income) for target (Transferencia Entrante)
+    // NOTE: For income, Expense model uses negative amounts in this system to represent income
+    await prisma.expense.create({
+      data: {
+        title: `Transferencia de ${fromAccount.name}`,
+        amount: -sourceDollarAmount,
+        amountBs: -(sourceDollarAmount * bcvRate),
+        categoryId: incomeCat.id,
+        description: 'Transferencia entre cuentas',
+        financeAccountId: toAccount.id
+      }
+    });
+
+    // Update balances
+    await prisma.financeAccount.update({
+      where: { id: fromAccount.id },
+      data: { balance: { decrement: parsedAmount } }
+    });
+
+    await prisma.financeAccount.update({
+      where: { id: toAccount.id },
+      data: { balance: { increment: targetAmount } }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in transfer:', error);
+    res.status(500).json({ error: 'Error processing transfer' });
+  }
+});
+
 app.get('/api/finance-accounts', authMiddleware, async (req, res) => {
   try {
     const accounts = await prisma.financeAccount.findMany({ orderBy: { createdAt: 'desc' } });

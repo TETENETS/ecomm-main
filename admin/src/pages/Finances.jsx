@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Plus, Trash2, Loader2, TrendingUp, TrendingDown, DollarSign,
-  BarChart3, X, FileText, ShoppingBag, AlertTriangle, Briefcase, Edit, Package, Clock
+  BarChart3, X, FileText, ShoppingBag, AlertTriangle, Briefcase, Edit, Package, Clock, ArrowRightLeft, RefreshCw
 } from 'lucide-react';
 
 import api from '../api';
@@ -193,6 +193,88 @@ const TransactionModal = ({ onClose, onCreated, categories, financeAccounts }) =
             </div>
           </div>
           <button type="submit" disabled={saving} className="w-full bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600">{saving ? 'Guardando...' : 'Registrar Gasto'}</button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ── Modal: Transferencia ───────────────────────────────────────────
+const TransferModal = ({ onClose, onCreated, financeAccounts, currentBcvRate }) => {
+  const [form, setForm] = useState({ fromAccountId: '', toAccountId: '', amount: '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.fromAccountId === form.toAccountId) {
+      alert('La cuenta origen y destino deben ser distintas');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post('/finance-accounts/transfer', form);
+      onCreated();
+      onClose();
+    } catch { alert('Error al realizar transferencia'); }
+    finally { setSaving(false); }
+  };
+
+  const fromAcc = financeAccounts?.find(a => a.id === parseInt(form.fromAccountId));
+  const toAcc = financeAccounts?.find(a => a.id === parseInt(form.toAccountId));
+  const parsedAmt = parseFloat(form.amount) || 0;
+
+  let previewText = '';
+  if (fromAcc && toAcc && parsedAmt > 0) {
+    let targetAmt = parsedAmt;
+    let targetSym = toAcc.currency === '$' ? '$' : 'Bs. ';
+    if (fromAcc.currency === '$' && toAcc.currency === 'Bs') {
+      targetAmt = parsedAmt * currentBcvRate;
+    } else if (fromAcc.currency === 'Bs' && toAcc.currency === '$') {
+      targetAmt = parsedAmt / currentBcvRate;
+    }
+    previewText = `Se descontarán ${fromAcc.currency === '$' ? '$' : 'Bs. '}${parsedAmt.toFixed(2)} de ${fromAcc.name} y se ingresarán ${targetSym}${targetAmt.toFixed(2)} a ${toAcc.name}`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+            <RefreshCw size={20} className="text-blue-500" /> Transferir entre Cuentas
+          </h2>
+          <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Origen</label>
+              <select required value={form.fromAccountId} onChange={e => setForm({...form, fromAccountId: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
+                <option value="">Seleccionar...</option>
+                {financeAccounts && financeAccounts.map(fa => (
+                  <option key={fa.id} value={fa.id}>{fa.name} ({fa.currency})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destino</label>
+              <select required value={form.toAccountId} onChange={e => setForm({...form, toAccountId: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl outline-none">
+                <option value="">Seleccionar...</option>
+                {financeAccounts && financeAccounts.map(fa => (
+                  <option key={fa.id} value={fa.id}>{fa.name} ({fa.currency})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Monto (en moneda origen)</label>
+            <input required type="number" step="0.01" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" />
+          </div>
+          {previewText && (
+            <div className="bg-blue-50 text-blue-800 text-sm p-3 rounded-xl">
+              {previewText} <br/><span className="text-xs opacity-75">(Tasa BCV actual: {currentBcvRate})</span>
+            </div>
+          )}
+          <button type="submit" disabled={saving || !form.fromAccountId || !form.toAccountId} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50">{saving ? 'Transfiriendo...' : 'Transferir'}</button>
         </form>
       </div>
     </div>
@@ -444,6 +526,7 @@ const Finances = ({ openNewExpense }) => {
   const [savingClosure, setSavingClosure] = useState(false);
   
   const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showFinanceAccountModal, setShowFinanceAccountModal] = useState(false);
   const [accountToEdit, setAccountToEdit] = useState(null);
@@ -1139,9 +1222,14 @@ const Finances = ({ openNewExpense }) => {
         <div className="bg-white rounded-xl border shadow-sm w-full flex flex-col h-[600px]">
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
             <h3 className="font-bold text-gray-800 flex items-center gap-2"><Briefcase size={18} className="text-blue-500"/> Cuentas Bancarias</h3>
-            <button onClick={() => { setAccountToEdit(null); setShowFinanceAccountModal(true); }} className="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
-              Nueva Cuenta
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setShowTransferModal(true)} className="bg-emerald-600 text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center gap-2">
+                <ArrowRightLeft size={14} /> Transferir
+              </button>
+              <button onClick={() => { setAccountToEdit(null); setShowFinanceAccountModal(true); }} className="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">
+                Nueva Cuenta
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto flex-1 overflow-y-auto">
             <table className="w-full text-left text-sm relative">
@@ -1267,7 +1355,7 @@ const Finances = ({ openNewExpense }) => {
       {showTransactionModal && <TransactionModal onClose={() => setShowTransactionModal(false)} onCreated={fetchAll} categories={categories} financeAccounts={financeAccounts} />}
       {showCategoryModal && <CategoryModal onClose={() => setShowCategoryModal(false)} onCreated={fetchAll} existingCategories={categories} />}
       {showFinanceAccountModal && <FinanceAccountModal onClose={() => setShowFinanceAccountModal(false)} onCreated={fetchAll} accountToEdit={accountToEdit} />}
-      
+      {showTransferModal && <TransferModal onClose={() => setShowTransferModal(false)} onCreated={fetchAll} financeAccounts={financeAccounts} currentBcvRate={currentBcvRate} />}
       <ClosureDetailsModal closure={selectedClosureModal} onClose={() => setSelectedClosureModal(null)} bcvRate={currentBcvRate} />
     </div>
   );
