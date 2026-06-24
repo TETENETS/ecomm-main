@@ -5,7 +5,7 @@ import api from '../api';
 import {
   Package, Phone, MapPin, Eye, CheckCircle, XCircle, Clock,
   ChevronDown, ChevronUp, Loader2, Plus, Search, Filter,
-  ShoppingCart, User, CreditCard, MessageCircle, X, Truck, RotateCcw, Link as LinkIcon, Edit
+  ShoppingCart, User, CreditCard, MessageCircle, X, Truck, RotateCcw, Link as LinkIcon, Edit, DollarSign
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
