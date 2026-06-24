@@ -454,8 +454,12 @@ const ClosureDetailsModal = ({ closure, onClose, bcvRate = 1 }) => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`font-bold text-base ${o.type === 'REVERSAL' ? 'text-red-600' : 'text-gray-800'}`}>${Number(o.amount).toFixed(2)}</div>
-                    {o.amountBs && <div className={`font-semibold text-xs mt-1 ${o.type === 'REVERSAL' ? 'text-red-500' : 'text-gray-400'}`}>Bs. {Number(o.amountBs).toFixed(2)}</div>}
+                    <div className={`font-bold text-base ${o.type === 'REVERSAL' ? 'text-red-600' : 'text-gray-800'}`}>
+                      ${Number(o.amount || (o.amountBs / bcvRate)).toFixed(2)}
+                    </div>
+                    <div className={`font-semibold text-xs mt-1 ${o.type === 'REVERSAL' ? 'text-red-500' : 'text-gray-400'}`}>
+                      Bs. {Number(o.amountBs || (o.amount * bcvRate)).toFixed(2)}
+                    </div>
                   </div>
                 </div>
               ))}

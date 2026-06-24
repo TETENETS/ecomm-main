@@ -1123,8 +1123,8 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
           data: {
             orderId: order.id,
             type: 'INCOME',
-            amount: isBsAccount ? 0 : order.totalAmount,
-            amountBs: isBsAccount ? order.totalAmountBs : 0,
+            amount: order.totalAmount,
+            amountBs: order.totalAmountBs || (order.totalAmount * (order.bcvRate || 1)),
             paymentMethod: order.paymentMethod,
             financeAccountId: updateData.financeAccountId
           }
