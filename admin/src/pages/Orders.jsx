@@ -263,7 +263,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit })
                 <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                   <div className="flex items-center gap-3">
                     {item.product?.imageUrl ? (
-                      <img src={`http://localhost:5000${item.product.imageUrl}`} className="w-12 h-12 rounded-lg object-cover border border-gray-200" alt={item.product?.name} />
+                      <img src={getImageUrl(item.product.imageUrl)} className="w-12 h-12 rounded-lg object-cover border border-gray-200" alt={item.product?.name} />
                     ) : (
                       <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
                         <Package size={18} className="text-gray-400" />
