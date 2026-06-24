@@ -1054,7 +1054,12 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
       orderBy: { createdAt: 'desc' },
       include: { 
         items: {
-          include: { product: true, variant: true }
+          include: { 
+            product: {
+              include: { category: true, productLine: true }
+            }, 
+            variant: true 
+          }
         },
         dueDates: true
       }

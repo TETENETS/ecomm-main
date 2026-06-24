@@ -262,12 +262,20 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit })
               {order.items?.map((item, i) => (
                 <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <Package size={16} className="text-gray-400" />
-                    </div>
+                    {item.product?.imageUrl ? (
+                      <img src={`http://localhost:5000${item.product.imageUrl}`} className="w-12 h-12 rounded-lg object-cover border border-gray-200" alt={item.product?.name} />
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
+                        <Package size={18} className="text-gray-400" />
+                      </div>
+                    )}
                     <div>
                       <p className="font-semibold text-gray-700 text-sm">{item.product?.name}</p>
-                      {item.variant && <p className="text-xs text-blue-600">{item.variant.name}</p>}
+                      {item.variant && <p className="text-xs text-blue-600 font-medium">Var: {item.variant.name}</p>}
+                      <div className="flex gap-2 mt-0.5">
+                        {item.product?.category && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{item.product.category.name}</span>}
+                        {item.product?.productLine && <span className="text-[10px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded">{item.product.productLine.name}</span>}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
