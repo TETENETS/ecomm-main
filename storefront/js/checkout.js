@@ -87,8 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                         </div>
                                         <div class="row mt-3">
                                             <div class="col-12 d-flex">
-                                                <button type="button" id="btnBloquearMapa" class="btn btn-primary w-100 mr-2" style="color: white; border-radius: 0;">Fijar Ubicación</button>
-                                                <button type="button" id="btnDesbloquearMapa" class="btn btn-danger w-100 d-none" style="color: white; border-radius: 0;">Modificar Ubicación</button>
+                                                <button type="button" id="btnMiUbicacion" class="btn btn-primary w-100" style="color: white; border-radius: 0; background-color: #03a9f4; border-color: #03a9f4;">
+                                                    📍 Mi Ubicación
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -210,13 +211,11 @@ function renderCheckoutOrder() {
 function initMapLogic() {
     const latInput = document.getElementById('locationMapLat');
     const lngInput = document.getElementById('locationMapLng');
-    const btnBloquear = document.getElementById('btnBloquearMapa');
-    const btnDesbloquear = document.getElementById('btnDesbloquearMapa');
+    const btnMiUbicacion = document.getElementById('btnMiUbicacion');
     const btnSubmit = document.getElementById('btnSubmitOrder');
     const form = document.getElementById('checkoutForm');
 
     let map;
-    let mapaBloqueado = false;
     let latInicial = 10.120270;
     let lngInicial = -64.647798;
 
@@ -228,53 +227,46 @@ function initMapLogic() {
         }).addTo(map);
 
         map.on('move', () => {
-            if (!mapaBloqueado) {
-                const center = map.getCenter();
-                latInput.value = center.lat.toFixed(6);
-                lngInput.value = center.lng.toFixed(6);
-            }
+            const center = map.getCenter();
+            latInput.value = center.lat.toFixed(6);
+            lngInput.value = center.lng.toFixed(6);
         });
 
         latInput.value = latInicial.toFixed(6);
         lngInput.value = lngInicial.toFixed(6);
 
-        // Try to get user's location
+        // Try to get user's location automatically on load
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition((position) => {
                 latInicial = position.coords.latitude;
                 lngInicial = position.coords.longitude;
                 map.setView([latInicial, lngInicial], 17);
-                if (!mapaBloqueado) {
-                    latInput.value = latInicial.toFixed(6);
-                    lngInput.value = lngInicial.toFixed(6);
-                }
+                latInput.value = latInicial.toFixed(6);
+                lngInput.value = lngInicial.toFixed(6);
             }, (error) => {
                 console.warn("Geolocation denied or error:", error);
             });
         }
     }, 500);
 
-    btnBloquear.addEventListener('click', () => {
-        if(!map) return;
-        mapaBloqueado = true;
-        const center = map.getCenter();
-        latInput.value = center.lat.toFixed(6);
-        lngInput.value = center.lng.toFixed(6);
-        map.dragging.disable(); map.touchZoom.disable(); map.doubleClickZoom.disable();
-        map.scrollWheelZoom.disable(); map.boxZoom.disable(); map.keyboard.disable();
-        document.getElementById('contenedor-mapa').classList.add('mapa-bloqueado');
-        btnBloquear.classList.add('d-none');
-        btnDesbloquear.classList.remove('d-none');
-    });
-
-    btnDesbloquear.addEventListener('click', () => {
-        if(!map) return; 
-        mapaBloqueado = false;
-        map.dragging.enable(); map.touchZoom.enable(); map.doubleClickZoom.enable();
-        map.scrollWheelZoom.enable(); map.boxZoom.enable(); map.keyboard.enable();
-        document.getElementById('contenedor-mapa').classList.remove('mapa-bloqueado');
-        btnDesbloquear.classList.add('d-none');
-        btnBloquear.classList.remove('d-none');
+    btnMiUbicacion.addEventListener('click', () => {
+        if ("geolocation" in navigator) {
+            btnMiUbicacion.innerHTML = 'Obteniendo...';
+            navigator.geolocation.getCurrentPosition((position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                if(map) map.setView([lat, lng], 17);
+                latInput.value = lat.toFixed(6);
+                lngInput.value = lng.toFixed(6);
+                btnMiUbicacion.innerHTML = '📍 Mi Ubicación';
+            }, (error) => {
+                console.warn("Geolocation error:", error);
+                alert("No se pudo obtener la ubicación. Verifica los permisos de tu navegador.");
+                btnMiUbicacion.innerHTML = '📍 Mi Ubicación';
+            });
+        } else {
+            alert("Tu navegador no soporta geolocalización.");
+        }
     });
 
     btnSubmit.addEventListener('click', async (e) => {
@@ -283,12 +275,17 @@ function initMapLogic() {
         if(!form.checkValidity()) return form.reportValidity();
 
         const emailInput = document.getElementById('customerEmail').value;
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!emailInput || !emailRegex.test(emailInput)) {
-            return alert("Por favor, ingresa un correo electrónico válido.");
+            return alert("Por favor, ingresa un correo electrónico válido (ejemplo: usuario@gmail.com).");
         }
-
-        if(!mapaBloqueado) return alert("Por favor, fija tu ubicación en el mapa antes de continuar.");
+        
+        // Anti-typo checks for common mistakes like .cor, .con, gmai.com
+        const emailLower = emailInput.toLowerCase();
+        if (emailLower.endsWith('.cor') || emailLower.endsWith('.con') || emailLower.endsWith('.cpm') || 
+            emailLower.includes('@gmai.') || emailLower.includes('@hotmai.')) {
+            return alert("Parece que hay un error tipográfico en tu correo. Por favor, verifica el dominio (ej: .com, .es).");
+        }
         
         const cart = getCart();
         if(cart.length === 0) return alert("Tu carrito está vacío.");
