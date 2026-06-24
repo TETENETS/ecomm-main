@@ -1320,7 +1320,8 @@ const Finances = ({ openNewExpense }) => {
           <table className="w-full text-left text-sm">
             <thead className="bg-white text-gray-400 font-bold uppercase text-xs border-b border-gray-100">
               <tr>
-                <th className="p-4 px-6">Orden / Cliente</th>
+                <th className="p-4 px-6">Orden</th>
+                <th className="p-4">Cliente</th>
                 <th className="p-4">Fechas Límite</th>
                 <th className="p-4">Monto Total</th>
                 <th className="p-4">Abono</th>
@@ -1333,10 +1334,8 @@ const Finances = ({ openNewExpense }) => {
                 const restante = Math.max(0, Number(o.totalAmount) - abonado);
                 return (
                 <tr key={o.id} onClick={() => setSelectedOrder(o)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
-                  <td className="p-4 px-6">
-                    <p className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">Pedido #{o.id}</p>
-                    <p className="text-xs text-gray-500">{o.customerName}</p>
-                  </td>
+                  <td className="p-4 px-6 text-gray-500 font-bold">#{o.id}</td>
+                  <td className="p-4 font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{o.customerName}</td>
                   <td className="p-4">
                     {o.dueDates && o.dueDates.length > 0 ? (
                       <div className="flex flex-col gap-1">
@@ -1357,7 +1356,7 @@ const Finances = ({ openNewExpense }) => {
                 );
               })}
               {pendingOrders.length === 0 && (
-                <tr><td colSpan="5" className="p-8 text-center text-gray-400">No hay cuentas por cobrar pendientes.</td></tr>
+                <tr><td colSpan="6" className="p-8 text-center text-gray-400">No hay cuentas por cobrar pendientes.</td></tr>
               )}
             </tbody>
           </table>
