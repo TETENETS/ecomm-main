@@ -940,18 +940,16 @@ const Finances = ({ openNewExpense }) => {
                 <td className="p-4 text-gray-500 text-xs font-medium">{new Date(e.createdAt).toLocaleDateString()}</td>
                 <td className="p-4 text-right font-black text-red-500">
                   {e.category?.type !== 'INCOME' ? (() => {
-                    const isBs = e.financeAccount?.currency === 'Bs' || (e.amountBs && e.amountBs > 0);
-                    const valBs = Number(e.amountBs || (e.amount * currentBcvRate)).toFixed(2);
-                    const valD = Number(e.amount || (e.amountBs / currentBcvRate)).toFixed(2);
-                    return isBs ? `Bs. ${valBs} ($${valD})` : `$${valD} (Bs. ${valBs})`;
+                    const isBs = e.financeAccount?.currency === 'Bs' || (!e.financeAccount && e.amountBs && e.amountBs !== 0);
+                    const val = Math.abs(isBs ? (e.amountBs || (e.amount * currentBcvRate)) : (e.amount || (e.amountBs / currentBcvRate)));
+                    return isBs ? `Bs. ${val.toFixed(2)}` : `$${val.toFixed(2)}`;
                   })() : '-'}
                 </td>
                 <td className="p-4 text-right font-black text-green-600">
                   {e.category?.type === 'INCOME' ? (() => {
-                    const isBs = e.financeAccount?.currency === 'Bs' || (e.amountBs && e.amountBs > 0);
-                    const valBs = Number(e.amountBs || (e.amount * currentBcvRate)).toFixed(2);
-                    const valD = Number(e.amount || (e.amountBs / currentBcvRate)).toFixed(2);
-                    return isBs ? `Bs. ${valBs} ($${valD})` : `$${valD} (Bs. ${valBs})`;
+                    const isBs = e.financeAccount?.currency === 'Bs' || (!e.financeAccount && e.amountBs && e.amountBs !== 0);
+                    const val = Math.abs(isBs ? (e.amountBs || (e.amount * currentBcvRate)) : (e.amount || (e.amountBs / currentBcvRate)));
+                    return isBs ? `Bs. ${val.toFixed(2)}` : `$${val.toFixed(2)}`;
                   })() : '-'}
                 </td>
                 <td className="p-4 text-center">
