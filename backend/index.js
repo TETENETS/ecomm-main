@@ -1094,6 +1094,19 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
     if (req.body.financeAccountId) updateData.financeAccountId = parseInt(req.body.financeAccountId);
     if (req.body.paymentReference) updateData.paymentReference = req.body.paymentReference;
 
+    if (oldOrder.status !== 'COMPLETED' && status === 'COMPLETED') {
+      let bcvRate = 1;
+      const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+      if (manualBcv && manualBcv.value && parseFloat(manualBcv.value) > 0) {
+        bcvRate = parseFloat(manualBcv.value);
+      } else {
+        const info = bcvService.obtenerInfo();
+        if (info && info.valor) bcvRate = info.valor;
+      }
+      updateData.bcvRate = bcvRate;
+      updateData.totalAmountBs = oldOrder.totalAmount * bcvRate;
+    }
+
     if (status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates)) {
       // Create due dates
       updateData.dueDates = {
@@ -1307,7 +1320,27 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
     
     let updateData = {};
     if (totalAbonado >= parseFloat(order.totalAmount) - 0.01) { // -0.01 for floating point safety
-      updateData = { status: 'COMPLETED', paymentMethod: paymentMethod || order.paymentMethod || 'Abono' };
+      updateData = { 
+        status: 'COMPLETED', 
+        paymentMethod: paymentMethod || order.paymentMethod || 'Abono',
+        bcvRate: bcvRate,
+        totalAmountBs: parseFloat(order.totalAmount) * bcvRate
+      };
+
+      // De-stock (deduct inventory) when auto-completing
+      for (const item of order.items) {
+        if (item.productVariantId) {
+          await prisma.productVariant.update({
+            where: { id: item.productVariantId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        } else {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        }
+      }
     }
 
     const updatedOrder = await prisma.order.update({
