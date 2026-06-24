@@ -353,7 +353,9 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
                       </div>
                       <div className="text-right">
                         <p className="font-black text-green-600">
-                          {mov.amountBs > 0 ? `Bs. ${Number(mov.amountBs).toFixed(2)}` : `$${Number(mov.amount).toFixed(2)}`}
+                          {(!mov.financeAccount || mov.financeAccount.currency === '$') 
+                            ? `$${Number(mov.amount || (mov.amountBs / (order.bcvRate || currentBcvRate || 1))).toFixed(2)}` 
+                            : `Bs. ${Number(mov.amountBs || (mov.amount * (order.bcvRate || currentBcvRate || 1))).toFixed(2)}`}
                         </p>
                       </div>
                     </div>
