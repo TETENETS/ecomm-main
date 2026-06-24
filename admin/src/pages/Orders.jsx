@@ -933,6 +933,7 @@ const Orders = ({ openNewOrder }) => {
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [products, setProducts] = useState([]);
   const [financeAccounts, setFinanceAccounts] = useState([]);
+  const [currentBcvRate, setCurrentBcvRate] = useState(1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -947,14 +948,18 @@ const Orders = ({ openNewOrder }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [oRes, pRes, fRes] = await Promise.all([
+      const [oRes, pRes, fRes, bcvRes] = await Promise.all([
         api.get('/orders?status=ALL'), 
         api.get('/products'),
-        api.get('/finance-accounts')
+        api.get('/finance-accounts'),
+        api.get('/bcv')
       ]);
       setOrders(oRes.data);
       setProducts(pRes.data);
       setFinanceAccounts(fRes.data);
+      if (bcvRes.data && bcvRes.data.valor) {
+        setCurrentBcvRate(bcvRes.data.valor);
+      }
 
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get('id');
@@ -1122,7 +1127,7 @@ const Orders = ({ openNewOrder }) => {
       </div>
 
       {selectedOrder && (
-        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} financeAccounts={financeAccounts} onEdit={handleEditOrder} onOrderUpdated={(updated) => {
+        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} financeAccounts={financeAccounts} currentBcvRate={currentBcvRate} onEdit={handleEditOrder} onOrderUpdated={(updated) => {
           setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
           setSelectedOrder(updated);
         }} />
