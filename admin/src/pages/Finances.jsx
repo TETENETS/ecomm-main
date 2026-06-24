@@ -7,6 +7,7 @@ import {
 
 import api from '../api';
 import { exportToCSV } from '../utils/csv';
+import { OrderModal } from './Orders';
 
 // ── Modal: Categoría ───────────────────────────────────────────
 const CategoryModal = ({ onClose, onCreated, existingCategories }) => {
@@ -516,6 +517,7 @@ const Finances = ({ openNewExpense }) => {
   const [historyFilterProduct, setHistoryFilterProduct] = useState('');
   const [historyFilterLine, setHistoryFilterLine] = useState('');
   const [selectedClosureModal, setSelectedClosureModal] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
   
   const [closureDate, setClosureDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1322,9 +1324,9 @@ const Finances = ({ openNewExpense }) => {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {pendingOrders.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={o.id} onClick={() => setSelectedOrder(o)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
                   <td className="p-4 px-6">
-                    <p className="font-bold text-gray-800">Pedido #{o.id}</p>
+                    <p className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">Pedido #{o.id}</p>
                     <p className="text-xs text-gray-500">{o.customerName}</p>
                   </td>
                   <td className="p-4">
@@ -1357,6 +1359,30 @@ const Finances = ({ openNewExpense }) => {
       {showFinanceAccountModal && <FinanceAccountModal onClose={() => setShowFinanceAccountModal(false)} onCreated={fetchAll} accountToEdit={accountToEdit} />}
       {showTransferModal && <TransferModal onClose={() => setShowTransferModal(false)} onCreated={fetchAll} financeAccounts={financeAccounts} currentBcvRate={currentBcvRate} />}
       <ClosureDetailsModal closure={selectedClosureModal} onClose={() => setSelectedClosureModal(null)} bcvRate={currentBcvRate} />
+      
+      {selectedOrder && (
+        <OrderModal 
+          order={selectedOrder} 
+          onClose={() => setSelectedOrder(null)} 
+          financeAccounts={financeAccounts} 
+          currentBcvRate={currentBcvRate}
+          onStatusChange={async (id, status, dueDates, pm, fa, pr) => {
+            const payload = { status };
+            if (dueDates) payload.dueDates = dueDates;
+            if (pm) payload.paymentMethod = pm;
+            if (fa) payload.financeAccountId = fa;
+            if (pr) payload.paymentReference = pr;
+            const res = await api.patch(`/orders/${id}/status`, payload);
+            setSelectedOrder(res.data);
+            fetchAll();
+          }}
+          onOrderUpdated={(updated) => {
+            setSelectedOrder(updated);
+            fetchAll();
+          }}
+          onEdit={() => {}} // dummy
+        />
+      )}
     </div>
   );
 };

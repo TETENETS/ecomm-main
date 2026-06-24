@@ -60,7 +60,7 @@ const LocationSelector = ({ lat, lng, onChange }) => {
 };
 
 // ── Modal: detalle de pedido ──────────────────────────────────────
-const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit }) => {
+const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, onOrderUpdated, currentBcvRate = 1 }) => {
   const [saving, setSaving] = useState(false);
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(order?.paymentMethod || 'Pago Móvil (Bs)');
@@ -69,6 +69,11 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit })
   const [editDueDates, setEditDueDates] = useState(
     order?.dueDates?.length > 0 ? order.dueDates.map(d => d.dueDate.split('T')[0]) : ['']
   );
+  const [abonoAmount, setAbonoAmount] = useState('');
+  const [abonoCurrency, setAbonoCurrency] = useState('$');
+  const [abonoAccountId, setAbonoAccountId] = useState('');
+  const [abonoSaving, setAbonoSaving] = useState(false);
+
   if (!order) return null;
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
   const selectedAccount = financeAccounts?.find(acc => acc.id === Number(selectedAccountId));
@@ -124,6 +129,31 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit })
       await onStatusChange(order.id, order.status, editDueDates.filter(d => d));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAbono = async () => {
+    if (!abonoAmount || isNaN(abonoAmount) || parseFloat(abonoAmount) <= 0) return alert('Ingrese un monto válido');
+    if (!abonoAccountId) return alert('Seleccione una cuenta destino');
+    setAbonoSaving(true);
+    try {
+      const res = await api.post(`/orders/${order.id}/abono`, {
+        amount: parseFloat(abonoAmount),
+        currency: abonoCurrency,
+        financeAccountId: abonoAccountId
+      });
+      if (onOrderUpdated) {
+        onOrderUpdated(res.data);
+      } else {
+        // Fallback update if onOrderUpdated is not provided
+        window.location.reload();
+      }
+      setAbonoAmount('');
+      setAbonoAccountId('');
+    } catch (e) {
+      alert(e.response?.data?.error || 'Error registrando abono');
+    } finally {
+      setAbonoSaving(false);
     }
   };
 
@@ -305,6 +335,80 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit })
               </div>
             </div>
           </div>
+
+          {order.status === 'PENDING_PAYMENT' && (
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-4">
+              <h3 className="font-bold text-blue-800 flex items-center gap-2"><DollarSign size={18}/> Abonos y Pagos Parciales</h3>
+              
+              {/* Historial de abonos */}
+              {order.movements && order.movements.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {order.movements.map(mov => (
+                    <div key={mov.id} className="bg-white p-3 rounded-lg border border-blue-100 flex justify-between items-center shadow-sm">
+                      <div>
+                        <p className="text-xs font-bold text-gray-500">{new Date(mov.createdAt).toLocaleString()}</p>
+                        <p className="text-sm font-semibold text-gray-800">{mov.financeAccount?.name} ({mov.financeAccount?.currency})</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-green-600">
+                          {mov.amountBs > 0 ? `Bs. ${Number(mov.amountBs).toFixed(2)}` : `$${Number(mov.amount).toFixed(2)}`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center p-2 bg-blue-100/50 rounded-lg">
+                    <span className="font-bold text-blue-800">Total Abonado (Ref $)</span>
+                    <span className="font-black text-blue-800">
+                      ${Number(order.movements.reduce((sum, m) => sum + (Number(m.amount) || Number(m.amountBs) / (order.bcvRate || currentBcvRate || 1)), 0)).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-yellow-100/50 rounded-lg">
+                    <span className="font-bold text-yellow-800">Restante por Cobrar (Ref $)</span>
+                    <span className="font-black text-yellow-800">
+                      ${Math.max(0, Number(order.totalAmount) - Number(order.movements.reduce((sum, m) => sum + (Number(m.amount) || Number(m.amountBs) / (order.bcvRate || currentBcvRate || 1)), 0))).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Formulario nuevo abono */}
+              <div className="border-t border-blue-200/50 pt-4">
+                <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Registrar Nuevo Abono</label>
+                <div className="flex gap-2 mb-3">
+                  <select value={abonoCurrency} onChange={e => setAbonoCurrency(e.target.value)} className="w-20 p-2 rounded-lg border border-blue-300 text-sm outline-none bg-white font-bold">
+                    <option value="$">$</option>
+                    <option value="Bs">Bs</option>
+                  </select>
+                  <input type="number" step="0.01" min="0" placeholder="Monto abonado..." value={abonoAmount} onChange={e => setAbonoAmount(e.target.value)} className="flex-1 p-2 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium" />
+                </div>
+                <div className="mb-3">
+                  <select value={abonoAccountId} onChange={e => setAbonoAccountId(e.target.value)} className="w-full p-2 rounded-lg border border-blue-300 text-sm outline-none bg-white font-medium">
+                    <option value="">-- Seleccione cuenta destino --</option>
+                    {financeAccounts?.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.name} ({acc.currency})</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {abonoAmount && !isNaN(abonoAmount) && (
+                  <div className="mb-3 text-xs text-blue-600 bg-blue-100/50 p-2 rounded flex justify-between">
+                    <span>Equivalente estimado:</span>
+                    <span className="font-bold">
+                      {abonoCurrency === '$' 
+                        ? `Bs. ${(parseFloat(abonoAmount) * (currentBcvRate || 1)).toFixed(2)}` 
+                        : `$ ${(parseFloat(abonoAmount) / (currentBcvRate || 1)).toFixed(2)}`}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button type="button" onClick={handleSaveAbono} disabled={abonoSaving} className="bg-blue-600 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2 transition-colors">
+                    {abonoSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Registrar Abono
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {order.status === 'PENDING_PAYMENT' && (
             <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 space-y-4">
@@ -980,7 +1084,10 @@ const Orders = ({ openNewOrder }) => {
       </div>
 
       {selectedOrder && (
-        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} financeAccounts={financeAccounts} onEdit={handleEditOrder} />
+        <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onStatusChange={handleStatusChange} financeAccounts={financeAccounts} onEdit={handleEditOrder} onOrderUpdated={(updated) => {
+          setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+          setSelectedOrder(updated);
+        }} />
       )}
       {showNewOrder && (
         <OrderFormModal onClose={() => setShowNewOrder(false)} onCreated={fetchData} products={products} />
@@ -993,3 +1100,4 @@ const Orders = ({ openNewOrder }) => {
 };
 
 export default Orders;
+export { OrderModal };

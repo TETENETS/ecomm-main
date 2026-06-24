@@ -1061,7 +1061,8 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
             variant: true 
           }
         },
-        dueDates: true
+        dueDates: true,
+        movements: { include: { financeAccount: true } }
       }
     });
     res.json(orders);
@@ -1236,6 +1237,67 @@ app.post('/api/orders/:id/reverse', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error reversing order' });
+  }
+});
+
+// Register partial payment (abono) for an order
+app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, currency, financeAccountId, paymentMethod } = req.body;
+    
+    if (!amount || !financeAccountId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: parseInt(id) },
+      include: { movements: true }
+    });
+
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    
+    // Get BCV rate
+    let bcvRate = 1;
+    const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+    if (manualBcv && manualBcv.value && parseFloat(manualBcv.value) > 0) {
+      bcvRate = parseFloat(manualBcv.value);
+    } else {
+      const info = bcvService.obtenerInfo();
+      if (info && info.valor) bcvRate = info.valor;
+    }
+
+    const parsedAmount = parseFloat(amount);
+    const amountUsd = currency === '$' ? parsedAmount : parsedAmount / bcvRate;
+    const amountBs = currency === 'Bs' ? parsedAmount : parsedAmount * bcvRate;
+
+    // Increment finance account balance
+    await prisma.financeAccount.update({
+      where: { id: parseInt(financeAccountId) },
+      data: { balance: { increment: currency === 'Bs' ? amountBs : amountUsd } }
+    });
+
+    // Create OrderMovement
+    const movement = await prisma.orderMovement.create({
+      data: {
+        orderId: order.id,
+        type: 'INCOME', // Treating abonos as INCOME so they appear in closing
+        amount: amountUsd,
+        amountBs: amountBs,
+        paymentMethod: paymentMethod || order.paymentMethod || 'Abono',
+        financeAccountId: parseInt(financeAccountId)
+      }
+    });
+
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: { items: { include: { product: { include: { category: true, productLine: true } }, variant: true } }, dueDates: true, movements: { include: { financeAccount: true } } }
+    });
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error registering payment' });
   }
 });
 
