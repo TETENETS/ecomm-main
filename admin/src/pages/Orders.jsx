@@ -320,18 +320,22 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
             <div className="mt-4 flex justify-between items-center pt-3 border-t border-gray-200">
               <div className="flex flex-col">
                 <span className="font-bold text-gray-500">Total</span>
-                {order.bcvRate && <span className="text-xs text-gray-400">Tasa BCV Aplicada: {Number(order.bcvRate).toFixed(2)} Bs/$</span>}
+                {order.status === 'PENDING_PAYMENT' ? (
+                  <span className="text-xs text-blue-500 font-bold">Tasa BCV del Día: {Number(currentBcvRate).toFixed(2)} Bs/$</span>
+                ) : (
+                  order.bcvRate && <span className="text-xs text-gray-400">Tasa BCV Aplicada: {Number(order.bcvRate).toFixed(2)} Bs/$</span>
+                )}
               </div>
               <div className="text-right">
                 {order.paymentMethod && order.paymentMethod.includes('(Bs)') ? (
                   <>
-                    <span className="text-xl font-black text-gray-800 block">Bs. {order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2)}</span>
+                    <span className="text-xl font-black text-gray-800 block">Bs. {order.status === 'PENDING_PAYMENT' ? (Number(order.totalAmount) * (currentBcvRate || 1)).toFixed(2) : (order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2))}</span>
                     <span className="text-sm font-bold text-gray-500">${Number(order.totalAmount).toFixed(2)}</span>
                   </>
                 ) : (
                   <>
                     <span className="text-xl font-black text-gray-800 block">${Number(order.totalAmount).toFixed(2)}</span>
-                    {order.totalAmountBs && <span className="text-sm font-bold text-gray-500">Bs. {Number(order.totalAmountBs).toFixed(2)}</span>}
+                    <span className="text-sm font-bold text-gray-500">Bs. {order.status === 'PENDING_PAYMENT' ? (Number(order.totalAmount) * (currentBcvRate || 1)).toFixed(2) : (order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2))}</span>
                   </>
                 )}
               </div>
