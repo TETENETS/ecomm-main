@@ -72,6 +72,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
   const [abonoAmount, setAbonoAmount] = useState('');
   const [abonoCurrency, setAbonoCurrency] = useState('$');
   const [abonoAccountId, setAbonoAccountId] = useState('');
+  const [abonoDate, setAbonoDate] = useState(new Date().toISOString().split('T')[0]);
   const [abonoSaving, setAbonoSaving] = useState(false);
 
   if (!order) return null;
@@ -140,7 +141,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
       const res = await api.post(`/orders/${order.id}/abono`, {
         amount: parseFloat(abonoAmount),
         currency: abonoCurrency,
-        financeAccountId: abonoAccountId
+        financeAccountId: abonoAccountId,
+        date: abonoDate
       });
       if (onOrderUpdated) {
         onOrderUpdated(res.data);
@@ -374,7 +376,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
               {/* Formulario nuevo abono */}
               <div className="border-t border-blue-200/50 pt-4">
                 <label className="text-xs font-bold text-blue-700 uppercase block mb-2">Registrar Nuevo Abono</label>
-                <div className="flex gap-2 mb-3">
+                <div className="flex gap-2 mb-3 flex-wrap sm:flex-nowrap">
+                  <input type="date" value={abonoDate} onChange={e => setAbonoDate(e.target.value)} className="w-full sm:w-1/3 p-2 rounded-lg border border-blue-300 text-sm outline-none bg-white font-bold text-gray-700" />
                   <select value={abonoCurrency} onChange={e => setAbonoCurrency(e.target.value)} className="w-20 p-2 rounded-lg border border-blue-300 text-sm outline-none bg-white font-bold">
                     <option value="$">$</option>
                     <option value="Bs">Bs</option>
@@ -443,8 +446,9 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
           )}
 
           {/* Acciones de estado */}
-          <div className="border-t border-gray-100 pt-4">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Cambiar Estado</h3>
+          {order.status !== 'PENDING_PAYMENT' && (
+            <div className="border-t border-gray-100 pt-4">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Cambiar Estado</h3>
             
             {order.status === 'CANCELED' ? (
               <p className="text-sm font-bold text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 text-center">
@@ -557,6 +561,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>

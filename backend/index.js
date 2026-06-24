@@ -1244,7 +1244,7 @@ app.post('/api/orders/:id/reverse', authMiddleware, async (req, res) => {
 app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { amount, currency, financeAccountId, paymentMethod } = req.body;
+    const { amount, currency, financeAccountId, paymentMethod, date } = req.body;
     
     if (!amount || !financeAccountId) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -1285,9 +1285,19 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
         amount: amountUsd,
         amountBs: amountBs,
         paymentMethod: paymentMethod || order.paymentMethod || 'Abono',
-        financeAccountId: parseInt(financeAccountId)
+        financeAccountId: parseInt(financeAccountId),
+        createdAt: date ? new Date(date) : undefined
       }
     });
+
+    const dueDates = await prisma.orderDueDate.findMany({
+      where: { orderId: order.id },
+      orderBy: { dueDate: 'asc' }
+    });
+
+    if (dueDates.length > 0) {
+      await prisma.orderDueDate.delete({ where: { id: dueDates[0].id } });
+    }
 
     const allMovements = await prisma.orderMovement.findMany({
       where: { orderId: order.id }
