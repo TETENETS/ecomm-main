@@ -1321,7 +1321,6 @@ const Finances = ({ openNewExpense }) => {
                 <th className="p-4">Monto Total</th>
                 <th className="p-4">Abono</th>
                 <th className="p-4">Cuenta por Pagar</th>
-                <th className="p-4">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1350,12 +1349,11 @@ const Finances = ({ openNewExpense }) => {
                   <td className="p-4 font-black text-gray-800">${Number(o.totalAmount).toFixed(2)}</td>
                   <td className="p-4 font-black text-green-600">${abonado.toFixed(2)}</td>
                   <td className="p-4 font-black text-red-600">${restante.toFixed(2)}</td>
-                  <td className="p-4"><span className="text-[11px] font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-md">Por Cobrar</span></td>
                 </tr>
                 );
               })}
               {pendingOrders.length === 0 && (
-                <tr><td colSpan="6" className="p-8 text-center text-gray-400">No hay cuentas por cobrar pendientes.</td></tr>
+                <tr><td colSpan="5" className="p-8 text-center text-gray-400">No hay cuentas por cobrar pendientes.</td></tr>
               )}
             </tbody>
           </table>
