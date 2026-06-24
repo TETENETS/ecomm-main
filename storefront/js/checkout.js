@@ -17,9 +17,20 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <form id="checkoutForm">
                                 <div class="row">
-                                    <div class="col-md-12 mb-3">
+                                    <div class="col-md-6 mb-3">
                                         <label for="customerName">Nombre Completo <span>*</span></label>
                                         <input type="text" class="form-control" id="customerName" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="customerCedulaNum">Cédula <span>*</span></label>
+                                        <div class="d-flex">
+                                            <select class="form-control" id="cedulaType" style="width: 70px; padding: 0 10px; border-right: none; border-radius: 0;">
+                                                <option value="V-">V-</option>
+                                                <option value="E-">E-</option>
+                                                <option value="J-">J-</option>
+                                            </select>
+                                            <input type="text" class="form-control" id="customerCedulaNum" required minlength="6" maxlength="9" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="border-left: none; border-radius: 0;">
+                                        </div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label>Teléfono <span>*</span></label>
@@ -292,6 +303,7 @@ function initMapLogic() {
 
             const payload = {
                 customerName: document.getElementById('customerName').value,
+                customerCedula: `${document.getElementById('cedulaType').value}${document.getElementById('customerCedulaNum').value}`,
                 customerPhone: `${document.getElementById('phoneCountry').value.replace(/\D/g, '')}${document.getElementById('phoneArea').value.replace(/\D/g, '')}${document.getElementById('phoneNum').value.replace(/\D/g, '')}`,
                 customerEmail: document.getElementById('customerEmail').value,
                 paymentMethod: document.getElementById('paymentMethod').value,
