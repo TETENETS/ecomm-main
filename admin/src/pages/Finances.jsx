@@ -1329,49 +1329,51 @@ const Finances = ({ openNewExpense }) => {
           <div className="p-5 border-b border-gray-100 bg-gray-50/50">
             <h2 className="font-bold text-gray-800 flex items-center gap-2"><Clock size={18} className="text-yellow-600"/> Cuentas por Cobrar (Órdenes)</h2>
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white text-gray-400 font-bold uppercase text-xs border-b border-gray-100">
-              <tr>
-                <th className="p-4 px-6">Orden</th>
-                <th className="p-4">Cliente</th>
-                <th className="p-4">Fechas Límite</th>
-                <th className="p-4">Monto Total</th>
-                <th className="p-4">Abono</th>
-                <th className="p-4">Cuenta por Pagar</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {pendingOrders.map(o => {
-                const abonado = o.movements ? o.movements.reduce((sum, m) => sum + (Number(m.amount) || Number(m.amountBs) / (o.bcvRate || currentBcvRate || 1)), 0) : 0;
-                const restante = Math.max(0, Number(o.totalAmount) - abonado);
-                return (
-                <tr key={o.id} onClick={() => setSelectedOrder(o)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
-                  <td className="p-4 px-6 text-gray-500 font-bold">#{o.id}</td>
-                  <td className="p-4 font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{o.customerName}</td>
-                  <td className="p-4">
-                    {o.dueDates && o.dueDates.length > 0 ? (
-                      <div className="flex flex-col gap-1">
-                        {o.dueDates.map((d, i) => (
-                          <span key={i} className="text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded w-max">
-                            {new Date(d.dueDate).toLocaleDateString()}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 italic text-xs">Sin fecha asignada</span>
-                    )}
-                  </td>
-                  <td className="p-4 font-black text-gray-800">${Number(o.totalAmount).toFixed(2)}</td>
-                  <td className="p-4 font-black text-green-600">${abonado.toFixed(2)}</td>
-                  <td className="p-4 font-black text-red-600">${restante.toFixed(2)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-white text-gray-400 font-bold uppercase text-xs border-b border-gray-100">
+                <tr>
+                  <th className="p-4 px-6">Orden</th>
+                  <th className="p-4">Cliente</th>
+                  <th className="p-4">Fechas Límite</th>
+                  <th className="p-4">Monto Total</th>
+                  <th className="p-4">Abono</th>
+                  <th className="p-4">Cuenta por Pagar</th>
                 </tr>
-                );
-              })}
-              {pendingOrders.length === 0 && (
-                <tr><td colSpan="6" className="p-8 text-center text-gray-400">No hay cuentas por cobrar pendientes.</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pendingOrders.map(o => {
+                  const abonado = o.movements ? o.movements.reduce((sum, m) => sum + (Number(m.amount) || Number(m.amountBs) / (o.bcvRate || currentBcvRate || 1)), 0) : 0;
+                  const restante = Math.max(0, Number(o.totalAmount) - abonado);
+                  return (
+                  <tr key={o.id} onClick={() => setSelectedOrder(o)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
+                    <td className="p-4 px-6 text-gray-500 font-bold">#{o.id}</td>
+                    <td className="p-4 font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{o.customerName}</td>
+                    <td className="p-4">
+                      {o.dueDates && o.dueDates.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {o.dueDates.map((d, i) => (
+                            <span key={i} className="text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded w-max">
+                              {new Date(d.dueDate).toLocaleDateString()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic text-xs">Sin fecha asignada</span>
+                      )}
+                    </td>
+                    <td className="p-4 font-black text-gray-800">${Number(o.totalAmount).toFixed(2)}</td>
+                    <td className="p-4 font-black text-green-600">${abonado.toFixed(2)}</td>
+                    <td className="p-4 font-black text-red-600">${restante.toFixed(2)}</td>
+                  </tr>
+                  );
+                })}
+                {pendingOrders.length === 0 && (
+                  <tr><td colSpan="6" className="p-8 text-center text-gray-400">No hay cuentas por cobrar pendientes.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
