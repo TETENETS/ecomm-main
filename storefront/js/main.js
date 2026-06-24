@@ -280,6 +280,7 @@ window.addToCart = function(productId) {
     
     if (existingIndex > -1) {
         cart[existingIndex].quantity += quantity;
+        cart[existingIndex].maxStock = maxStock;
     } else {
         cart.push({
             productId: prod.id,
@@ -288,6 +289,7 @@ window.addToCart = function(productId) {
             variantName: variantName,
             price: finalPrice,
             quantity: quantity,
+            maxStock: maxStock,
             imageUrl: prod.imageUrl ? getImageUrl(prod.imageUrl) : 'img/product-img/product-1.jpg'
         });
     }

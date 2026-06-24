@@ -327,7 +327,12 @@ function initMapLogic() {
 window.updateCheckoutQuantity = function(index, change) {
     const cart = getCart();
     if (cart[index]) {
-        cart[index].quantity += change;
+        const newQty = cart[index].quantity + change;
+        if (change > 0 && cart[index].maxStock !== undefined && newQty > cart[index].maxStock) {
+            alert(`¡Stock insuficiente! Sólo quedan ${cart[index].maxStock} unidades disponibles de este producto/variante.`);
+            return;
+        }
+        cart[index].quantity = newQty;
         if (cart[index].quantity < 1) {
             cart.splice(index, 1);
         }
