@@ -918,52 +918,54 @@ const Finances = ({ openNewExpense }) => {
       {/* Historial de Gastos */}
       <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gray-50/50"><h2 className="font-bold text-gray-800 flex items-center gap-2"><FileText size={18} className="text-gray-400"/> Historial de Gastos</h2></div>
-        <table className="w-full text-left text-sm">
-          <thead className="bg-white text-gray-400 font-bold uppercase text-xs border-b border-gray-100">
-            <tr>
-              <th className="p-4 px-6">Descripción</th>
-              <th className="p-4">Categoría</th>
-              <th className="p-4">Fecha</th>
-              <th className="p-4 text-right">Débito</th>
-              <th className="p-4 text-right">Crédito</th>
-              <th className="p-4 text-center"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {expenses.map(e => (
-              <tr key={e.id} className="hover:bg-gray-50 group transition-colors">
-                <td className="p-4 px-6">
-                  <div className="font-semibold text-gray-800">{e.title}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Cuenta: {e.financeAccount ? e.financeAccount.name : 'General'}</div>
-                </td>
-                <td className="p-4"><span className="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md">{e.category ? e.category.name : e.legacyCategory}</span></td>
-                <td className="p-4 text-gray-500 text-xs font-medium">{new Date(e.createdAt).toLocaleDateString()}</td>
-                <td className="p-4 text-right font-black text-red-500">
-                  {e.category?.type !== 'INCOME' ? (() => {
-                    const isBs = e.financeAccount?.currency === 'Bs' || (!e.financeAccount && e.amountBs && e.amountBs !== 0);
-                    const val = Math.abs(isBs ? (e.amountBs || (e.amount * currentBcvRate)) : (e.amount || (e.amountBs / currentBcvRate)));
-                    return isBs ? `Bs. ${val.toFixed(2)}` : `$${val.toFixed(2)}`;
-                  })() : '-'}
-                </td>
-                <td className="p-4 text-right font-black text-green-600">
-                  {e.category?.type === 'INCOME' ? (() => {
-                    const isBs = e.financeAccount?.currency === 'Bs' || (!e.financeAccount && e.amountBs && e.amountBs !== 0);
-                    const val = Math.abs(isBs ? (e.amountBs || (e.amount * currentBcvRate)) : (e.amount || (e.amountBs / currentBcvRate)));
-                    return isBs ? `Bs. ${val.toFixed(2)}` : `$${val.toFixed(2)}`;
-                  })() : '-'}
-                </td>
-                <td className="p-4 text-center">
-                  <button onClick={() => handleDeleteExpense(e.id)} className="p-1.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-md opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
-                </td>
-              </tr>
-            ))}
-            {expenses.length === 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-white text-gray-400 font-bold uppercase text-xs border-b border-gray-100">
               <tr>
-                <td colSpan="6" className="p-8 text-center text-gray-400">No hay gastos registrados</td>
+                <th className="p-4 px-6">Descripción</th>
+                <th className="p-4">Categoría</th>
+                <th className="p-4">Fecha</th>
+                <th className="p-4 text-right">Débito</th>
+                <th className="p-4 text-right">Crédito</th>
+                <th className="p-4 text-center"></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {expenses.map(e => (
+                <tr key={e.id} className="hover:bg-gray-50 group transition-colors">
+                  <td className="p-4 px-6">
+                    <div className="font-semibold text-gray-800">{e.title}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">Cuenta: {e.financeAccount ? e.financeAccount.name : 'General'}</div>
+                  </td>
+                  <td className="p-4"><span className="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md">{e.category ? e.category.name : e.legacyCategory}</span></td>
+                  <td className="p-4 text-gray-500 text-xs font-medium">{new Date(e.createdAt).toLocaleDateString()}</td>
+                  <td className="p-4 text-right font-black text-red-500">
+                    {e.category?.type !== 'INCOME' ? (() => {
+                      const isBs = e.financeAccount?.currency === 'Bs' || (!e.financeAccount && e.amountBs && e.amountBs !== 0);
+                      const val = Math.abs(isBs ? (e.amountBs || (e.amount * currentBcvRate)) : (e.amount || (e.amountBs / currentBcvRate)));
+                      return isBs ? `Bs. ${val.toFixed(2)}` : `$${val.toFixed(2)}`;
+                    })() : '-'}
+                  </td>
+                  <td className="p-4 text-right font-black text-green-600">
+                    {e.category?.type === 'INCOME' ? (() => {
+                      const isBs = e.financeAccount?.currency === 'Bs' || (!e.financeAccount && e.amountBs && e.amountBs !== 0);
+                      const val = Math.abs(isBs ? (e.amountBs || (e.amount * currentBcvRate)) : (e.amount || (e.amountBs / currentBcvRate)));
+                      return isBs ? `Bs. ${val.toFixed(2)}` : `$${val.toFixed(2)}`;
+                    })() : '-'}
+                  </td>
+                  <td className="p-4 text-center">
+                    <button onClick={() => handleDeleteExpense(e.id)} className="p-1.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-md opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
+                  </td>
+                </tr>
+              ))}
+              {expenses.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="p-8 text-center text-gray-400">No hay gastos registrados</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
       </>
       )}
