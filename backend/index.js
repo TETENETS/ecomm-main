@@ -1308,8 +1308,31 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
       orderBy: { dueDate: 'asc' }
     });
 
-    if (dueDates.length > 0) {
-      await prisma.orderDueDate.delete({ where: { id: dueDates[0].id } });
+    const allMovementsBefore = await prisma.orderMovement.findMany({
+      where: { orderId: order.id }
+    });
+    
+    // Calculate how much was already paid before this abono
+    const totalAbonadoBefore = allMovementsBefore.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / (order.bcvRate || bcvRate || 1)), 0);
+    const remainingBefore = Math.max(0, parseFloat(order.totalAmount) - totalAbonadoBefore);
+
+    if (dueDates.length > 0 && remainingBefore > 0) {
+      let paid = amountUsd;
+      let remainingDatesCount = dueDates.length;
+      let currentRemaining = remainingBefore;
+      
+      for (const date of dueDates) {
+        const quota = currentRemaining / remainingDatesCount;
+        // if they pay at least the quota (with small tolerance), eliminate this date
+        if (paid >= quota - 0.01) {
+          await prisma.orderDueDate.delete({ where: { id: date.id } });
+          paid -= quota;
+          currentRemaining -= quota;
+          remainingDatesCount--;
+        } else {
+          break; // They didn't pay enough to cover the next date
+        }
+      }
     }
 
     const allMovements = await prisma.orderMovement.findMany({

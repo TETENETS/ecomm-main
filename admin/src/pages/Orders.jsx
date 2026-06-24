@@ -63,6 +63,7 @@ const LocationSelector = ({ lat, lng, onChange }) => {
 const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, onOrderUpdated, currentBcvRate = 1 }) => {
   const [saving, setSaving] = useState(false);
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
+  const [showPendingPaymentPrompt, setShowPendingPaymentPrompt] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(order?.paymentMethod || 'Pago Móvil (Bs)');
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [paymentReference, setPaymentReference] = useState(order?.paymentReference || '');
@@ -84,6 +85,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
     if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId || (!isEfectivo && !paymentReference))) {
       if (!showPaymentPrompt) {
         setShowPaymentPrompt(true);
+        setShowPendingPaymentPrompt(false);
         return;
       }
       if (!selectedAccountId) {
@@ -92,6 +94,19 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
       }
       if (!isEfectivo && (!paymentReference || paymentReference.length !== 6)) {
         alert('Debe ingresar un número de referencia válido de 6 dígitos.');
+        return;
+      }
+    }
+    
+    if (newStatus === 'PENDING_PAYMENT' && order.status !== 'PENDING_PAYMENT') {
+      const validDates = editDueDates.filter(d => d);
+      if (!showPendingPaymentPrompt) {
+        setShowPendingPaymentPrompt(true);
+        setShowPaymentPrompt(false);
+        return;
+      }
+      if (validDates.length === 0) {
+        alert('Debe añadir al menos una fecha límite de pago antes de marcar la orden como Por Cobrar.');
         return;
       }
     }
@@ -106,6 +121,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
         newStatus === 'COMPLETED' ? (!isEfectivo ? paymentReference : undefined) : undefined
       );
       setShowPaymentPrompt(false);
+      setShowPendingPaymentPrompt(false);
     } finally {
       setSaving(false);
     }
@@ -319,14 +335,10 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
             </div>
             <div className="mt-4 flex justify-between items-center pt-3 border-t border-gray-200">
               <div className="flex flex-col">
-                <span className="font-bold text-gray-500">Total</span>
-                {order.status === 'PENDING_PAYMENT' ? (
+                <span>Total</span>
+                <div className="text-right">
+                  <div className="font-bold text-gray-800 text-lg">Bs. {(order.totalAmount * (currentBcvRate || 1)).toFixed(2)}</div>
                   <span className="text-xs text-blue-500 font-bold">Tasa BCV del Día: {Number(currentBcvRate).toFixed(2)} Bs/$</span>
-                ) : (
-                  order.bcvRate && <span className="text-xs text-gray-400">Tasa BCV Aplicada: {Number(order.bcvRate).toFixed(2)} Bs/$</span>
-                )}
-              </div>
-              <div className="text-right">
                 {order.paymentMethod && order.paymentMethod.includes('(Bs)') ? (
                   <>
                     <span className="text-xl font-black text-gray-800 block">Bs. {order.status === 'PENDING_PAYMENT' ? (Number(order.totalAmount) * (currentBcvRate || 1)).toFixed(2) : (order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2))}</span>
@@ -419,8 +431,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
             </div>
           )}
 
-          {order.status === 'PENDING_PAYMENT' && (
-            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 space-y-4">
+          {(order.status === 'PENDING_PAYMENT' || showPendingPaymentPrompt) && (
+            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 space-y-4 mb-4">
               <div>
                 <label className="text-xs font-bold text-yellow-700 uppercase block mb-2">Añadir nueva fecha límite</label>
                 <div className="flex gap-2">
@@ -443,9 +455,20 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
                 </div>
               )}
               
-              <div className="flex justify-end pt-2 border-t border-yellow-200/50">
-                <button onClick={saveDueDates} disabled={saving} className="bg-yellow-600 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-yellow-700 disabled:opacity-60 flex items-center gap-2 transition-colors">
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Clock size={14} />} Guardar Cambios
+              <div className="flex gap-2 mt-4 pt-2 border-t border-yellow-200/50 justify-end">
+                {showPendingPaymentPrompt && order.status !== 'PENDING_PAYMENT' && (
+                  <button onClick={() => setShowPendingPaymentPrompt(false)} className="bg-white text-gray-600 border border-gray-300 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                    Cancelar
+                  </button>
+                )}
+                <button onClick={() => {
+                  if (order.status === 'PENDING_PAYMENT') {
+                    saveDueDates();
+                  } else {
+                    changeStatus('PENDING_PAYMENT');
+                  }
+                }} disabled={saving} className="bg-yellow-600 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-yellow-700 disabled:opacity-60 flex items-center gap-2 transition-colors">
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Clock size={14} />} {order.status === 'PENDING_PAYMENT' ? 'Guardar Cambios' : 'Confirmar Por Cobrar'}
                 </button>
               </div>
             </div>
