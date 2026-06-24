@@ -1289,8 +1289,20 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
       }
     });
 
-    const updatedOrder = await prisma.order.findUnique({
+    const allMovements = await prisma.orderMovement.findMany({
+      where: { orderId: order.id }
+    });
+    
+    const totalAbonado = allMovements.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / (order.bcvRate || bcvRate || 1)), 0);
+    
+    let updateData = {};
+    if (totalAbonado >= parseFloat(order.totalAmount) - 0.01) { // -0.01 for floating point safety
+      updateData = { status: 'COMPLETED', paymentMethod: paymentMethod || order.paymentMethod || 'Abono' };
+    }
+
+    const updatedOrder = await prisma.order.update({
       where: { id: order.id },
+      data: updateData,
       include: { items: { include: { product: { include: { category: true, productLine: true } }, variant: true } }, dueDates: true, movements: { include: { financeAccount: true } } }
     });
 
