@@ -399,7 +399,7 @@ const ClosureDetailsModal = ({ closure, onClose, bcvRate = 1 }) => {
           <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
         </div>
         <div className="p-6 overflow-y-auto flex flex-col md:flex-row gap-6">
-          <div className="flex-1 bg-white p-5 rounded-xl border border-gray-100 shadow-sm self-start sticky top-0">
+          <div className="flex-1 bg-white p-5 rounded-xl border border-gray-100 shadow-sm self-start md:sticky top-0 z-10">
             <h4 className="font-bold text-gray-700 mb-4 text-xs uppercase tracking-wider">Desglose por Cuenta Destino</h4>
             <div className="space-y-3">
               {Object.entries((() => {
