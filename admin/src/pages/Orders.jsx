@@ -1071,58 +1071,60 @@ const Orders = ({ openNewOrder }) => {
             <Loader2 size={32} className="animate-spin text-blue-500" />
           </div>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50/80 text-gray-500 font-bold uppercase text-xs">
-              <tr>
-                <th className="p-4 px-6">ID</th>
-                <th className="p-4">Fecha</th>
-                <th className="p-4">Cliente</th>
-                <th className="p-4">Teléfono</th>
-                <th className="p-4">Total</th>
-                <th className="p-4">Estado</th>
-                <th className="p-4 text-center">Ver</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.length === 0 ? (
-                <tr><td colSpan="7" className="text-center py-16 text-gray-400 font-medium">No hay pedidos</td></tr>
-              ) : filtered.map(order => {
-                const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
-                const IconComp = cfg.icon;
-                return (
-                  <tr key={order.id} className="hover:bg-gray-50/60 transition-colors group cursor-pointer" onClick={() => setSelectedOrder(order)}>
-                    <td className="p-4 px-6 font-bold text-blue-600">#{order.id}</td>
-                    <td className="p-4 text-gray-500 text-xs">{new Date(order.createdAt).toLocaleDateString()}</td>
-                    <td className="p-4 font-semibold text-gray-700">{order.customerName}</td>
-                    <td className="p-4">
-                      <a href={`https://wa.me/${order.customerPhone?.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                        className="flex items-center gap-1.5 text-green-600 font-semibold hover:underline text-xs">
-                        <MessageCircle size={13} /> {order.customerPhone}
-                      </a>
-                    </td>
-                    <td className="p-4 font-bold text-gray-800">
-                      {order.paymentMethod && order.paymentMethod.includes('(Bs)') ? (
-                        <span>Bs. {order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2)}</span>
-                      ) : (
-                        <span>${Number(order.totalAmount).toFixed(2)}</span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                        <IconComp size={11} /> {cfg.label}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <button onClick={e => { e.stopPropagation(); setSelectedOrder(order); }}
-                        className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                        <Eye size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-gray-50/80 text-gray-500 font-bold uppercase text-xs">
+                <tr>
+                  <th className="p-4 px-6">ID</th>
+                  <th className="p-4">Fecha</th>
+                  <th className="p-4">Cliente</th>
+                  <th className="p-4">Teléfono</th>
+                  <th className="p-4">Total</th>
+                  <th className="p-4">Estado</th>
+                  <th className="p-4 text-center">Ver</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.length === 0 ? (
+                  <tr><td colSpan="7" className="text-center py-16 text-gray-400 font-medium">No hay pedidos</td></tr>
+                ) : filtered.map(order => {
+                  const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+                  const IconComp = cfg.icon;
+                  return (
+                    <tr key={order.id} className="hover:bg-gray-50/60 transition-colors group cursor-pointer" onClick={() => setSelectedOrder(order)}>
+                      <td className="p-4 px-6 font-bold text-blue-600">#{order.id}</td>
+                      <td className="p-4 text-gray-500 text-xs">{new Date(order.createdAt).toLocaleDateString()}</td>
+                      <td className="p-4 font-semibold text-gray-700">{order.customerName}</td>
+                      <td className="p-4">
+                        <a href={`https://wa.me/${order.customerPhone?.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                          className="flex items-center gap-1.5 text-green-600 font-semibold hover:underline text-xs">
+                          <MessageCircle size={13} /> {order.customerPhone}
+                        </a>
+                      </td>
+                      <td className="p-4 font-bold text-gray-800">
+                        {order.paymentMethod && order.paymentMethod.includes('(Bs)') ? (
+                          <span>Bs. {order.totalAmountBs ? Number(order.totalAmountBs).toFixed(2) : (Number(order.totalAmount) * (order.bcvRate||1)).toFixed(2)}</span>
+                        ) : (
+                          <span>${Number(order.totalAmount).toFixed(2)}</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                          <IconComp size={11} /> {cfg.label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <button onClick={e => { e.stopPropagation(); setSelectedOrder(order); }}
+                          className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                          <Eye size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
