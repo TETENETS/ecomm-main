@@ -1081,12 +1081,11 @@ const Orders = ({ openNewOrder }) => {
                   <th className="p-4">Teléfono</th>
                   <th className="p-4">Total</th>
                   <th className="p-4">Estado</th>
-                  <th className="p-4 text-center">Ver</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.length === 0 ? (
-                  <tr><td colSpan="7" className="text-center py-16 text-gray-400 font-medium">No hay pedidos</td></tr>
+                  <tr><td colSpan="6" className="text-center py-16 text-gray-400 font-medium">No hay pedidos</td></tr>
                 ) : filtered.map(order => {
                   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
                   const IconComp = cfg.icon;
@@ -1112,12 +1111,6 @@ const Orders = ({ openNewOrder }) => {
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
                           <IconComp size={11} /> {cfg.label}
                         </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <button onClick={e => { e.stopPropagation(); setSelectedOrder(order); }}
-                          className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                          <Eye size={16} />
-                        </button>
                       </td>
                     </tr>
                   );
