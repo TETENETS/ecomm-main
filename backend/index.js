@@ -1284,6 +1284,13 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
     const amountUsd = currency === '$' ? parsedAmount : parsedAmount / bcvRate;
     const amountBs = currency === 'Bs' ? parsedAmount : parsedAmount * bcvRate;
 
+    const existingMovements = await prisma.orderMovement.findMany({ where: { orderId: order.id } });
+    const currentAbonado = existingMovements.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / bcvRate), 0);
+    
+    if (currentAbonado + amountUsd > parseFloat(order.totalAmount) + 0.5) {
+      return res.status(400).json({ error: 'El abono excede el monto restante de la orden' });
+    }
+
     // Increment finance account balance
     await prisma.financeAccount.update({
       where: { id: parseInt(financeAccountId) },
@@ -1308,34 +1315,24 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
       orderBy: { dueDate: 'asc' }
     });
 
-    const allMovementsBefore = await prisma.orderMovement.findMany({
-      where: { orderId: order.id }
-    });
+    const allMovements = await prisma.orderMovement.findMany({ where: { orderId: order.id } });
+    const totalAbonadoUsd = allMovements.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / (order.bcvRate || bcvRate || 1)), 0);
     
-    // Calculate how much was already paid before this abono
-    const totalAbonadoBefore = allMovementsBefore.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / (order.bcvRate || bcvRate || 1)), 0);
-    const remainingBefore = Math.max(0, parseFloat(order.totalAmount) - totalAbonadoBefore);
-
-    if (dueDates.length > 0 && remainingBefore > 0) {
-      let paid = amountUsd;
-      let remainingDatesCount = dueDates.length;
-      let currentRemaining = remainingBefore;
-      
-      for (const date of dueDates) {
-        if (date.isPaid) {
-          remainingDatesCount--;
-          continue;
-        }
-        const quota = currentRemaining / remainingDatesCount;
-        // if they pay at least the quota (with small tolerance), eliminate this date
-        if (paid >= quota - 0.01) {
-          await prisma.orderDueDate.update({ where: { id: date.id }, data: { isPaid: true } });
-          paid -= quota;
-          currentRemaining -= quota;
-          remainingDatesCount--;
-        } else {
-          break; // They didn't pay enough to cover the next date
-        }
+    const sortedDueDates = [...dueDates].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    
+    let paid = totalAbonadoUsd;
+    let remainingDatesCount = sortedDueDates.length;
+    let currentRemaining = parseFloat(order.totalAmount);
+    
+    for (const date of sortedDueDates) {
+      const quota = currentRemaining / remainingDatesCount;
+      if (paid >= quota - 0.01) {
+        await prisma.orderDueDate.update({ where: { id: date.id }, data: { isPaid: true } });
+        paid -= quota;
+        currentRemaining -= quota;
+        remainingDatesCount--;
+      } else {
+        await prisma.orderDueDate.update({ where: { id: date.id }, data: { isPaid: false } });
       }
     }
 
@@ -1417,6 +1414,13 @@ app.put('/api/orders/:id/abono/:abonoId', authMiddleware, async (req, res) => {
     const parsedAmount = parseFloat(amount);
     const newAmountUsd = currency === '$' ? parsedAmount : parsedAmount / bcvRate;
     const newAmountBs = currency === 'Bs' ? parsedAmount : parsedAmount * bcvRate;
+
+    const allOtherMovements = await prisma.orderMovement.findMany({ where: { orderId: order.id, id: { not: parseInt(abonoId) } } });
+    const currentAbonadoOther = allOtherMovements.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / bcvRate), 0);
+    
+    if (currentAbonadoOther + newAmountUsd > parseFloat(order.totalAmount) + 0.5) {
+      return res.status(400).json({ error: 'El abono excede el monto restante de la orden' });
+    }
 
     const oldAmountUsd = parseFloat(movement.amount || 0);
     const oldAmountBs = parseFloat(movement.amountBs || 0);

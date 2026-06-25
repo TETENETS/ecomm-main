@@ -152,6 +152,17 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
   const handleSaveAbono = async () => {
     if (!abonoAmount || isNaN(abonoAmount) || parseFloat(abonoAmount) <= 0) return alert('Ingrese un monto válido');
     if (!abonoAccountId) return alert('Seleccione una cuenta destino');
+
+    const amountNum = parseFloat(abonoAmount);
+    const amountUsd = abonoCurrency === '$' ? amountNum : amountNum / (currentBcvRate || 1);
+    
+    const totalAbonado = order.movements?.reduce((sum, m) => sum + (Number(m.amount) || Number(m.amountBs) / (order.bcvRate || currentBcvRate || 1)), 0) || 0;
+    const maxAbono = parseFloat(order.totalAmount) - totalAbonado;
+    
+    if (amountUsd > maxAbono + 0.5) {
+      return alert(`El monto máximo que puedes abonar es $${maxAbono.toFixed(2)} (Ref)`);
+    }
+
     setAbonoSaving(true);
     try {
       const res = await api.post(`/orders/${order.id}/abono`, {
@@ -184,6 +195,17 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
     const newAmount = window.prompt(`Ingrese el nuevo monto (en ${isUsd ? '$' : 'Bs'}):`, originalAmount);
     if (!newAmount || isNaN(newAmount) || parseFloat(newAmount) < 0) return;
     
+    const amountNum = parseFloat(newAmount);
+    const amountUsd = isUsd ? amountNum : amountNum / (order.bcvRate || currentBcvRate || 1);
+    
+    const otherMovements = order.movements?.filter(m => m.id !== mov.id) || [];
+    const totalAbonadoOther = otherMovements.reduce((sum, m) => sum + (Number(m.amount) || Number(m.amountBs) / (order.bcvRate || currentBcvRate || 1)), 0);
+    const maxAbono = parseFloat(order.totalAmount) - totalAbonadoOther;
+    
+    if (amountUsd > maxAbono + 0.5) {
+      return alert(`El monto máximo que puedes abonar para este pago es $${maxAbono.toFixed(2)} (Ref)`);
+    }
+
     setAbonoSaving(true);
     try {
       const res = await api.put(`/orders/${order.id}/abono/${mov.id}`, {
