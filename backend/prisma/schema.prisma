@@ -94,6 +94,7 @@ model OrderDueDate {
   orderId   Int
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   dueDate   DateTime
+  isPaid    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

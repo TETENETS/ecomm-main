@@ -1108,10 +1108,10 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
     }
 
     if (status === 'PENDING_PAYMENT' && dueDates && Array.isArray(dueDates)) {
-      // Create due dates
+      // Create due dates, replacing only the unpaid ones
       updateData.dueDates = {
-        deleteMany: {}, // replace existing
-        create: dueDates.map(date => ({ dueDate: new Date(date) }))
+        deleteMany: { isPaid: false }, 
+        create: dueDates.map(date => ({ dueDate: new Date(date), isPaid: false }))
       };
     }
 
@@ -1322,10 +1322,14 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
       let currentRemaining = remainingBefore;
       
       for (const date of dueDates) {
+        if (date.isPaid) {
+          remainingDatesCount--;
+          continue;
+        }
         const quota = currentRemaining / remainingDatesCount;
         // if they pay at least the quota (with small tolerance), eliminate this date
         if (paid >= quota - 0.01) {
-          await prisma.orderDueDate.delete({ where: { id: date.id } });
+          await prisma.orderDueDate.update({ where: { id: date.id }, data: { isPaid: true } });
           paid -= quota;
           currentRemaining -= quota;
           remainingDatesCount--;
@@ -1436,28 +1440,31 @@ app.put('/api/orders/:id/abono/:abonoId', authMiddleware, async (req, res) => {
       }
     });
 
-    // If payment was reduced (diffUsd < 0), we might need to regenerate a quota.
-    if (diffUsd < -0.01) {
-      const lastDate = order.dueDates.length > 0 
-        ? new Date(Math.max(...order.dueDates.map(d => new Date(d.dueDate))))
-        : new Date();
-      const nextDate = new Date(lastDate);
-      nextDate.setDate(nextDate.getDate() + 15);
-      
-      await prisma.orderDueDate.create({
-        data: {
-          orderId: order.id,
-          dueDate: nextDate
-        }
-      });
+    // Recalculate isPaid for all dueDates
+    const allMovements = await prisma.orderMovement.findMany({ where: { orderId: order.id } });
+    const totalAbonadoUsd = allMovements.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / bcvRate), 0);
+    
+    const sortedDueDates = [...order.dueDates].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    
+    let paid = totalAbonadoUsd;
+    let remainingDatesCount = sortedDueDates.length;
+    let currentRemaining = parseFloat(order.totalAmount);
+    
+    for (const date of sortedDueDates) {
+      const quota = currentRemaining / remainingDatesCount;
+      if (paid >= quota - 0.01) {
+        await prisma.orderDueDate.update({ where: { id: date.id }, data: { isPaid: true } });
+        paid -= quota;
+        currentRemaining -= quota;
+        remainingDatesCount--;
+      } else {
+        await prisma.orderDueDate.update({ where: { id: date.id }, data: { isPaid: false } });
+      }
     }
 
     // Re-check completion status
-    const allMovements = await prisma.orderMovement.findMany({ where: { orderId: order.id } });
-    const totalAbonado = allMovements.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / bcvRate), 0);
-    
     let updateData = {};
-    if (totalAbonado >= parseFloat(order.totalAmount) - 0.01 && order.status !== 'COMPLETED') {
+    if (totalAbonadoUsd >= parseFloat(order.totalAmount) - 0.01 && order.status !== 'COMPLETED') {
       updateData = { status: 'COMPLETED' };
       // De-stock (deduct inventory)
       const orderItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });
@@ -1465,7 +1472,7 @@ app.put('/api/orders/:id/abono/:abonoId', authMiddleware, async (req, res) => {
         if (item.productVariantId) await prisma.productVariant.update({ where: { id: item.productVariantId }, data: { stock: { decrement: item.quantity } } });
         else await prisma.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } });
       }
-    } else if (totalAbonado < parseFloat(order.totalAmount) - 0.01 && order.status === 'COMPLETED') {
+    } else if (totalAbonadoUsd < parseFloat(order.totalAmount) - 0.01 && order.status === 'COMPLETED') {
       updateData = { status: 'PENDING_PAYMENT' };
       // Re-stock
       const orderItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });

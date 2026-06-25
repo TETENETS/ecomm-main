@@ -1350,9 +1350,9 @@ const Finances = ({ openNewExpense }) => {
                     <td className="p-4 px-6 text-gray-500 font-bold">#{o.id}</td>
                     <td className="p-4 font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{o.customerName}</td>
                     <td className="p-4">
-                      {o.dueDates && o.dueDates.length > 0 ? (
+                      {o.dueDates && o.dueDates.filter(d => !d.isPaid).length > 0 ? (
                         <div className="flex flex-col gap-1">
-                          {o.dueDates.map((d, i) => (
+                          {o.dueDates.filter(d => !d.isPaid).map((d, i) => (
                             <span key={i} className="text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded w-max">
                               {new Date(d.dueDate).toLocaleDateString()}
                             </span>

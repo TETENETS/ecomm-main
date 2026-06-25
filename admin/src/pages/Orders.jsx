@@ -68,7 +68,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [paymentReference, setPaymentReference] = useState(order?.paymentReference || '');
   const [editDueDates, setEditDueDates] = useState(
-    order?.dueDates?.length > 0 ? order.dueDates.map(d => d.dueDate.split('T')[0]) : ['']
+    order?.dueDates?.length > 0 ? order.dueDates.filter(d => !d.isPaid).map(d => d.dueDate.split('T')[0]) : ['']
   );
   const [abonoAmount, setAbonoAmount] = useState('');
   const [abonoCurrency, setAbonoCurrency] = useState('$');
