@@ -173,6 +173,32 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
     } finally {
       setAbonoSaving(false);
     }
+  const handleEditAbono = async (mov) => {
+    const isUsd = (!mov.financeAccount || mov.financeAccount.currency === '$');
+    const originalAmount = isUsd 
+      ? Number(mov.amount || (mov.amountBs / (order.bcvRate || currentBcvRate || 1))).toFixed(2)
+      : Number(mov.amountBs || (mov.amount * (order.bcvRate || currentBcvRate || 1))).toFixed(2);
+      
+    const newAmount = window.prompt(`Ingrese el nuevo monto (en ${isUsd ? '$' : 'Bs'}):`, originalAmount);
+    if (!newAmount || isNaN(newAmount) || parseFloat(newAmount) < 0) return;
+    
+    setAbonoSaving(true);
+    try {
+      const res = await api.put(`/orders/${order.id}/abono/${mov.id}`, {
+        amount: parseFloat(newAmount),
+        currency: isUsd ? '$' : 'Bs',
+        date: mov.createdAt
+      });
+      if (onOrderUpdated) {
+        onOrderUpdated(res.data);
+      } else {
+        window.location.reload();
+      }
+    } catch (e) {
+      alert(e.response?.data?.error || 'Error editando abono');
+    } finally {
+      setAbonoSaving(false);
+    }
   };
 
   const [newDueDate, setNewDueDate] = useState('');
@@ -371,12 +397,15 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
                         <p className="text-xs font-bold text-gray-500">{new Date(mov.createdAt).toLocaleString()}</p>
                         <p className="text-sm font-semibold text-gray-800">{mov.financeAccount?.name} ({mov.financeAccount?.currency})</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex items-center gap-2">
                         <p className="font-black text-green-600">
                           {(!mov.financeAccount || mov.financeAccount.currency === '$') 
                             ? `$${Number(mov.amount || (mov.amountBs / (order.bcvRate || currentBcvRate || 1))).toFixed(2)}` 
                             : `Bs. ${Number(mov.amountBs || (mov.amount * (order.bcvRate || currentBcvRate || 1))).toFixed(2)}`}
                         </p>
+                        <button onClick={() => handleEditAbono(mov)} className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-500 transition-colors" title="Editar Abono">
+                          <Edit size={14} />
+                        </button>
                       </div>
                     </div>
                   ))}

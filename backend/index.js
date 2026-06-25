@@ -1379,6 +1379,115 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
   }
 });
 
+app.put('/api/orders/:id/abono/:abonoId', authMiddleware, async (req, res) => {
+  try {
+    const { id, abonoId } = req.params;
+    const { amount, currency, date } = req.body;
+    
+    if (!amount) return res.status(400).json({ error: 'Missing amount' });
+
+    const movement = await prisma.orderMovement.findUnique({
+      where: { id: parseInt(abonoId) },
+      include: { financeAccount: true, order: true }
+    });
+
+    if (!movement || movement.orderId !== parseInt(id)) {
+      return res.status(404).json({ error: 'Abono no encontrado' });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: parseInt(id) },
+      include: { dueDates: true }
+    });
+
+    let bcvRate = order.bcvRate || 1;
+    if (!order.bcvRate) {
+      const manualBcv = await prisma.setting.findUnique({ where: { key: 'manual_bcv_rate' } });
+      if (manualBcv && manualBcv.value && parseFloat(manualBcv.value) > 0) bcvRate = parseFloat(manualBcv.value);
+      else {
+        const info = bcvService.obtenerInfo();
+        if (info && info.valor) bcvRate = info.valor;
+      }
+    }
+
+    const parsedAmount = parseFloat(amount);
+    const newAmountUsd = currency === '$' ? parsedAmount : parsedAmount / bcvRate;
+    const newAmountBs = currency === 'Bs' ? parsedAmount : parsedAmount * bcvRate;
+
+    const oldAmountUsd = parseFloat(movement.amount || 0);
+    const oldAmountBs = parseFloat(movement.amountBs || 0);
+
+    const diffUsd = newAmountUsd - oldAmountUsd;
+    const diffBs = newAmountBs - oldAmountBs;
+
+    if (movement.financeAccountId) {
+      await prisma.financeAccount.update({
+        where: { id: movement.financeAccountId },
+        data: { balance: { increment: movement.financeAccount.currency === 'Bs' ? diffBs : diffUsd } }
+      });
+    }
+
+    await prisma.orderMovement.update({
+      where: { id: movement.id },
+      data: {
+        amount: newAmountUsd,
+        amountBs: newAmountBs,
+        createdAt: date ? new Date(date) : undefined
+      }
+    });
+
+    // If payment was reduced (diffUsd < 0), we might need to regenerate a quota.
+    if (diffUsd < -0.01) {
+      const lastDate = order.dueDates.length > 0 
+        ? new Date(Math.max(...order.dueDates.map(d => new Date(d.dueDate))))
+        : new Date();
+      const nextDate = new Date(lastDate);
+      nextDate.setDate(nextDate.getDate() + 15);
+      
+      await prisma.orderDueDate.create({
+        data: {
+          orderId: order.id,
+          dueDate: nextDate
+        }
+      });
+    }
+
+    // Re-check completion status
+    const allMovements = await prisma.orderMovement.findMany({ where: { orderId: order.id } });
+    const totalAbonado = allMovements.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / bcvRate), 0);
+    
+    let updateData = {};
+    if (totalAbonado >= parseFloat(order.totalAmount) - 0.01 && order.status !== 'COMPLETED') {
+      updateData = { status: 'COMPLETED' };
+      // De-stock (deduct inventory)
+      const orderItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });
+      for (const item of orderItems) {
+        if (item.productVariantId) await prisma.productVariant.update({ where: { id: item.productVariantId }, data: { stock: { decrement: item.quantity } } });
+        else await prisma.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } });
+      }
+    } else if (totalAbonado < parseFloat(order.totalAmount) - 0.01 && order.status === 'COMPLETED') {
+      updateData = { status: 'PENDING_PAYMENT' };
+      // Re-stock
+      const orderItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });
+      for (const item of orderItems) {
+        if (item.productVariantId) await prisma.productVariant.update({ where: { id: item.productVariantId }, data: { stock: { increment: item.quantity } } });
+        else await prisma.product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } });
+      }
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: updateData,
+      include: { items: { include: { product: true, variant: true } }, dueDates: true, movements: { include: { financeAccount: true } } }
+    });
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error updating abono' });
+  }
+});
+
 // Create manual order (admin)
 app.post('/api/orders', authMiddleware, async (req, res) => {
   try {
