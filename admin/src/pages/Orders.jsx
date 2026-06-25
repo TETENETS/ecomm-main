@@ -173,6 +173,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
     } finally {
       setAbonoSaving(false);
     }
+  };
+
   const handleEditAbono = async (mov) => {
     const isUsd = (!mov.financeAccount || mov.financeAccount.currency === '$');
     const originalAmount = isUsd 
