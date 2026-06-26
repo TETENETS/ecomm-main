@@ -20,22 +20,16 @@ bcvService.iniciar();
 const app = express();
 const prisma = new PrismaClient();
 
-
-const allowedOrigins = process.env.CORS_ORIGIN || '*';
-const originList = allowedOrigins.includes(',') ? allowedOrigins.split(',') : allowedOrigins;
-
-// 1. Configuración de CORS principal (con soporte para cookies/tokens)
+////////////////////////////////////
 app.use(cors({
-  origin: originList,
-  credentials: true // <-- Esto permite que Axios envíe cookies o headers de autorización
+  origin: '*', // Permite todo
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false // Desactivamos credenciales para la prueba
 }));
 
-// 2. Forzar respuesta al "Vuelo de reconocimiento" (Preflight)
-app.options('*', cors({
-  origin: originList,
-  credentials: true
-}));
-
+app.options('*', cors());
+///////////////////////////////////
 
 // Aumentar el límite para soportar imágenes en Base64
 app.use(express.json({ limit: '50mb' }));
