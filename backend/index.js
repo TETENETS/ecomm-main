@@ -21,7 +21,6 @@ const app = express();
 const prisma = new PrismaClient();
 
 
-
 const allowedOrigins = process.env.CORS_ORIGIN || '*';
 app.use(cors({
   origin: allowedOrigins.includes(',') ? allowedOrigins.split(',') : allowedOrigins
@@ -2233,6 +2232,7 @@ app.post('/api/logs', async (req, res) => {
   }
 });
 
+console.log(`cors:${allowedOrigins}`)
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
