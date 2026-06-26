@@ -1336,7 +1336,7 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
       }
     }
 
-    const allMovements = await prisma.orderMovement.findMany({
+    allMovements = await prisma.orderMovement.findMany({
       where: { orderId: order.id }
     });
     
