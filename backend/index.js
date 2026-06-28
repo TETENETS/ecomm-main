@@ -22,9 +22,14 @@ const prisma = new PrismaClient();
 
 
 
-const allowedOrigins = process.env.CORS_ORIGIN || '*';
+const rawOrigins = process.env.CORS_ORIGIN || '*';
+const parsedOrigins = rawOrigins !== '*' 
+  ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean) 
+  : '*';
+
 app.use(cors({
-  origin: allowedOrigins.includes(',') ? allowedOrigins.split(',') : allowedOrigins
+  origin: parsedOrigins,
+  credentials: true
 }));
 // Aumentar el límite para soportar imágenes en Base64
 app.use(express.json({ limit: '50mb' }));
@@ -2236,4 +2241,12 @@ app.post('/api/logs', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('--- CORS Configuration ---');
+  if (parsedOrigins === '*') {
+    console.log('CORS is fully open (Allowed for all origins: *)');
+  } else {
+    console.log('Allowed CORS Origins:');
+    parsedOrigins.forEach(origin => console.log(` - ${origin}`));
+  }
+  console.log('--------------------------');
 });
