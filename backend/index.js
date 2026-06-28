@@ -22,15 +22,14 @@ const prisma = new PrismaClient();
 
 
 
-const rawOrigins = process.env.CORS_ORIGIN || '*';
-const parsedOrigins = rawOrigins !== '*' 
-  ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean) 
-  : '*';
-
+const allowedOrigins = process.env.CORS_ORIGIN || '*';
 app.use(cors({
-  origin: parsedOrigins,
-  credentials: true
+  origin: allowedOrigins.includes(',') ? allowedOrigins.split(',') : allowedOrigins
 }));
+
+app.options('*', cors());
+///////////////////////////////////
+
 // Aumentar el límite para soportar imágenes en Base64
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -1341,7 +1340,7 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
       }
     }
 
-    const allMovements = await prisma.orderMovement.findMany({
+    allMovements = await prisma.orderMovement.findMany({
       where: { orderId: order.id }
     });
     
@@ -2238,6 +2237,7 @@ app.post('/api/logs', async (req, res) => {
   }
 });
 
+//console.log(`cors:${allowedOrigins}`)
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
