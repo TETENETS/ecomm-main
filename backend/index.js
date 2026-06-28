@@ -27,12 +27,13 @@ const parsedOrigins = rawOrigins !== '*'
   ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean) 
   : '*';
 
-app.use(cors({
+const corsOptions = {
   origin: parsedOrigins,
   credentials: true
-}));
+};
 
-app.options('*', cors());
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 ///////////////////////////////////
 
 // Aumentar el límite para soportar imágenes en Base64
