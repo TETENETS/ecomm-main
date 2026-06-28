@@ -22,9 +22,14 @@ const prisma = new PrismaClient();
 
 
 
-const allowedOrigins = process.env.CORS_ORIGIN || '*';
+const rawOrigins = process.env.CORS_ORIGIN || '*';
+const parsedOrigins = rawOrigins !== '*' 
+  ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean) 
+  : '*';
+
 app.use(cors({
-  origin: allowedOrigins.includes(',') ? allowedOrigins.split(',') : allowedOrigins
+  origin: parsedOrigins,
+  credentials: true
 }));
 
 app.options('*', cors());
