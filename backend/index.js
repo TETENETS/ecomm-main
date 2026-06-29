@@ -22,7 +22,7 @@ const prisma = new PrismaClient();
 
 
 
-const rawOrigins = process.env.CORS_ORIGIN || '*';
+const rawOrigins = (process.env.CORS_ORIGIN || '*').replace(/['"]/g, '');
 const parsedOrigins = rawOrigins !== '*' 
   ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean) 
   : '*';
