@@ -25,16 +25,30 @@ const prisma = new PrismaClient();
 const rawOrigins = (process.env.CORS_ORIGIN || '*').replace(/['"]/g, '');
 const parsedOrigins = rawOrigins !== '*' 
   ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean) 
-  : '*';
+  : null;
 
 const corsOptions = {
-  origin: parsedOrigins,
-  credentials: true
+  origin: function (origin, callback) {
+    // Permitir peticiones sin origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    // Si no hay lista de orígenes, permitir todo
+    if (!parsedOrigins) return callback(null, true);
+    // Validar contra la lista
+    if (parsedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`[CORS] Origen BLOQUEADO: "${origin}"`);
+    console.warn(`[CORS] Orígenes permitidos: ${parsedOrigins.join(', ')}`);
+    return callback(new Error(`Origen no permitido por CORS: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-///////////////////////////////////
 
 // Aumentar el límite para soportar imágenes en Base64
 app.use(express.json({ limit: '50mb' }));
