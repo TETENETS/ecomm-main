@@ -27,28 +27,32 @@ const parsedOrigins = rawOrigins !== '*'
   ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean) 
   : null;
 
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Permitir peticiones sin origin (curl, Postman, server-to-server)
-    if (!origin) return callback(null, true);
-    // Si no hay lista de orígenes, permitir todo
-    if (!parsedOrigins) return callback(null, true);
-    // Validar contra la lista
-    if (parsedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+// Middleware CORS manual — garantiza que las cabeceras lleguen al navegador
+// incluso cuando hay un reverse proxy (Traefik/EasyPanel) de por medio.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (!parsedOrigins) {
+    // Sin lista → permitir todo
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  } else if (origin && parsedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (origin) {
     console.warn(`[CORS] Origen BLOQUEADO: "${origin}"`);
     console.warn(`[CORS] Orígenes permitidos: ${parsedOrigins.join(', ')}`);
-    return callback(new Error(`Origen no permitido por CORS: ${origin}`));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  optionsSuccessStatus: 200
-};
+  }
 
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  // Responder inmediatamente a preflight OPTIONS
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  next();
+});
 
 // Aumentar el límite para soportar imágenes en Base64
 app.use(express.json({ limit: '50mb' }));
