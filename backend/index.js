@@ -1106,7 +1106,8 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
     const { status, dueDates, paymentMethod } = req.body;
     
     const oldOrder = await prisma.order.findUnique({
-      where: { id: parseInt(id) }
+      where: { id: parseInt(id) },
+      include: { items: true }
     });
     
     if (!oldOrder) {
@@ -1149,6 +1150,49 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
       include: { items: { include: { product: true, variant: true } }, dueDates: true }
     });
 
+    // --- GESTIÓN DE INVENTARIO ---
+    // Estados que comprometen el inventario: PENDING_PAYMENT y COMPLETED
+    const stockDeductedStatuses = ['PENDING_PAYMENT', 'COMPLETED'];
+    const wasStockDeducted = stockDeductedStatuses.includes(oldOrder.status);
+    const shouldDeductStock = stockDeductedStatuses.includes(status);
+
+    // Deducir stock: cuando la orden pasa a PENDING_PAYMENT o COMPLETED
+    // SOLO si no se había deducido antes (evita doble deducción)
+    if (!wasStockDeducted && shouldDeductStock) {
+      for (const item of order.items) {
+        if (item.productVariantId) {
+          await prisma.productVariant.update({
+            where: { id: item.productVariantId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        } else {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        }
+      }
+      console.log(`[STOCK] Inventario deducido para orden #${order.id} (${oldOrder.status} → ${status})`);
+    }
+
+    // Devolver stock: cuando se cancela una orden que ya tenía stock deducido
+    if (wasStockDeducted && status === 'CANCELED') {
+      for (const item of order.items) {
+        if (item.productVariantId) {
+          await prisma.productVariant.update({
+            where: { id: item.productVariantId },
+            data: { stock: { increment: item.quantity } }
+          });
+        } else {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } }
+          });
+        }
+      }
+      console.log(`[STOCK] Inventario restaurado para orden #${order.id} (${oldOrder.status} → CANCELED)`);
+    }
+
     if (oldOrder.status !== 'COMPLETED' && status === 'COMPLETED') {
       // Add money to finance account and create OrderMovement
       if (updateData.financeAccountId) {
@@ -1170,20 +1214,6 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
             financeAccountId: updateData.financeAccountId
           }
         });
-      }
-      // De-stock (deduct inventory)
-      for (const item of order.items) {
-        if (item.productVariantId) {
-          await prisma.productVariant.update({
-            where: { id: item.productVariantId },
-            data: { stock: { decrement: item.quantity } }
-          });
-        } else {
-          await prisma.product.update({
-            where: { id: item.productId },
-            data: { stock: { decrement: item.quantity } }
-          });
-        }
       }
     }
 
@@ -1213,6 +1243,7 @@ app.patch('/api/orders/:id/status', authMiddleware, async (req, res) => {
 
     res.json(order);
   } catch (error) {
+    console.error('Error updating order status:', error);
     res.status(500).json({ error: 'Error updating order status' });
   }
 });
