@@ -39,31 +39,56 @@ export function updateCartUI() {
     const cartListEl = document.getElementById('cart-list');
     if (cartListEl) {
         cartListEl.innerHTML = '';
-        cart.forEach((item, index) => {
-            const itemPrice = Number(item.price) || 0;
-            cartListEl.innerHTML += `
-                <div class="single-cart-item">
-                    <a href="#" class="product-image">
-                        <img src="${item.imageUrl}" class="cart-thumb" alt="">
-                        <div class="cart-item-desc">
-                            <span class="product-remove" onclick="window.removeFromCart(${index})"><i class="fa fa-close" aria-hidden="true"></i></span>
-                            <h6>${item.productName}</h6>
-                            <p class="size">Variante: ${item.variantName}</p>
-                            <p class="price">$${itemPrice.toFixed(2)} / Bs. ${(itemPrice * window.tasaBCV).toFixed(2)} x ${item.quantity}</p>
-                        </div>
-                    </a>
+        
+        if (cart.length === 0) {
+            cartListEl.innerHTML = `
+                <div class="flex h-full flex-col items-center justify-center text-center text-muted-foreground gap-4">
+                    <i data-lucide="shopping-bag" class="h-12 w-12 opacity-20"></i>
+                    <p>Tu carrito está vacío.</p>
                 </div>
             `;
-        });
-        
-        const summaryEl = document.getElementById('cart-summary');
-        if (summaryEl) {
-            summaryEl.innerHTML = `
-                <li><span>Subtotal:</span> <span>$${amount.toFixed(2)} / Bs. ${(amount * window.tasaBCV).toFixed(2)}</span></li>
-                <li><span>Envío:</span> <span>Gratis</span></li>
-                <li><span>Total:</span> <span>$${amount.toFixed(2)} / Bs. ${(amount * window.tasaBCV).toFixed(2)}</span></li>
-            `;
+        } else {
+            cart.forEach((item, index) => {
+                const itemPrice = Number(item.price) || 0;
+                cartListEl.innerHTML += `
+                    <div class="flex gap-4">
+                        <div class="relative h-24 w-20 shrink-0 overflow-hidden rounded-lg bg-muted">
+                            <img src="${item.imageUrl}" alt="${item.productName}" class="absolute inset-0 h-full w-full object-cover">
+                        </div>
+                        <div class="flex flex-1 flex-col justify-between">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <h4 class="font-heading text-lg font-semibold text-primary">${item.productName}</h4>
+                                    <p class="text-xs text-muted-foreground uppercase tracking-wider">${item.variantName}</p>
+                                </div>
+                                <button onclick="window.removeFromCart(${index})" class="text-muted-foreground transition-colors hover:text-destructive">
+                                    <i data-lucide="x" class="h-4 w-4"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-end justify-between">
+                                <div class="flex items-center rounded-md border border-border">
+                                    <span class="px-3 py-1 text-sm font-medium">${item.quantity}</span>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-semibold text-foreground">$${itemPrice.toFixed(2)}</p>
+                                    <p class="text-[10px] text-muted-foreground">Bs. ${(itemPrice * window.tasaBCV).toFixed(2)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
         }
+        
+        // Ensure Lucide icons are instantiated in the new HTML
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+        
+        const subtotalUsdEl = document.getElementById('cart-subtotal-usd');
+        const subtotalBsEl = document.getElementById('cart-subtotal-bs');
+        if (subtotalUsdEl) subtotalUsdEl.innerText = `$${amount.toFixed(2)}`;
+        if (subtotalBsEl) subtotalBsEl.innerText = `Bs. ${(amount * window.tasaBCV).toFixed(2)}`;
     }
 }
 
@@ -95,7 +120,7 @@ export function renderHeader() {
             <input type="search" placeholder="Buscar fragancias..." class="ml-2 w-44 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
           </div>
 
-          <button id="essenceCartBtn" class="relative grid h-10 w-10 place-items-center rounded-full text-primary transition-colors hover:bg-secondary">
+          <button id="essenceCartBtn" class="relative grid h-10 w-10 place-items-center rounded-full text-primary transition-colors hover:bg-secondary" onclick="document.getElementById('rightSideCart').classList.remove('translate-x-full'); document.getElementById('cartBackdrop').classList.remove('hidden'); setTimeout(() => document.getElementById('cartBackdrop').classList.remove('opacity-0'), 10);">
             <i data-lucide="shopping-bag" class="h-5 w-5"></i>
             <span id="cart-count-badge" class="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[11px] font-semibold text-accent-foreground" style="display:none;">0</span>
           </button>
@@ -116,20 +141,37 @@ export function renderHeader() {
 
 export function renderCartArea() {
     return `
-    <div class="right-side-cart-area">
-        <div class="cart-button">
-            <a href="#" id="rightSideCart"><img src="img/core-img/bag.svg" alt=""> <span>0</span></a>
+    <!-- Cart Backdrop -->
+    <div id="cartBackdrop" class="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm hidden transition-opacity duration-300 opacity-0" onclick="document.getElementById('rightSideCart').classList.add('translate-x-full'); this.classList.add('hidden', 'opacity-0');"></div>
+    
+    <!-- Cart Drawer -->
+    <div id="rightSideCart" class="fixed inset-y-0 right-0 z-[110] flex w-full max-w-md flex-col border-l border-border bg-background shadow-2xl transition-transform duration-300 translate-x-full">
+      <div class="flex items-center justify-between border-b border-border p-6">
+        <h2 class="font-heading text-2xl font-semibold text-primary">Tu Carrito</h2>
+        <button class="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" onclick="document.getElementById('rightSideCart').classList.add('translate-x-full'); document.getElementById('cartBackdrop').classList.add('hidden', 'opacity-0');">
+          <i data-lucide="x" class="h-5 w-5"></i>
+        </button>
+      </div>
+      
+      <!-- Cart Items List -->
+      <div class="flex-1 overflow-y-auto p-6 flex flex-col gap-6" id="cart-list">
+         <!-- Items will be injected here by JS -->
+      </div>
+      
+      <!-- Cart Summary -->
+      <div class="border-t border-border bg-muted/30 p-6">
+        <div class="mb-4 flex items-center justify-between">
+          <span class="text-sm font-medium text-foreground">Subtotal</span>
+          <div class="text-right">
+            <p class="font-heading text-lg font-semibold text-primary" id="cart-subtotal-usd">$0.00</p>
+            <p class="text-xs text-muted-foreground" id="cart-subtotal-bs">Bs. 0.00</p>
+          </div>
         </div>
-        <div class="cart-content d-flex">
-            <div class="cart-list" id="cart-list"></div>
-            <div class="cart-amount-summary">
-                <h2>Resumen</h2>
-                <ul class="summary-table" id="cart-summary"></ul>
-                <div class="checkout-btn mt-100">
-                    <a href="checkout.html" class="btn essence-btn">Finalizar Compra</a>
-                </div>
-            </div>
-        </div>
+        <a href="checkout.html" class="flex w-full items-center justify-center rounded-full bg-primary py-4 text-sm font-medium uppercase tracking-widest text-primary-foreground transition-all hover:bg-primary/90">
+          Finalizar Compra
+        </a>
+        <p class="mt-4 text-center text-xs text-muted-foreground">Envío gratis en compras superiores a $50</p>
+      </div>
     </div>
     `;
 }
