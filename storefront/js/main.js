@@ -13,30 +13,72 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Layout Base
     app.innerHTML = `
-        ${renderHeader()}
-        ${renderCartArea()}
-        
-        <div class="top_catagory_area section-padding-80 clearfix">
-            <div class="container">
-                <div class="row" id="product-lines-container"></div>
-            </div>
-        </div>
-
-        <section class="new_arrivals_area section-padding-80 clearfix" id="main-catalog-section">
-            <div class="container">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="section-heading text-center" id="catalog-header-container">
-                            <h2>Catálogo de Productos</h2>
-                        </div>
+        <div class="flex min-h-screen flex-col bg-background">
+            ${renderHeader()}
+            ${renderCartArea()}
+            
+            <main class="flex-1">
+                <!-- Hero Section -->
+                <section id="inicio" class="relative -mt-[68px] flex min-h-[88vh] items-center overflow-hidden md:-mt-[80px]">
+                  <img src="img/bg-img/bg-1.jpg" class="object-cover absolute inset-0 w-full h-full" alt="" />
+                  <div class="absolute inset-0 bg-gradient-to-r from-background/95 via-background/70 to-background/20"></div>
+                  <div class="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"></div>
+                  <div class="relative mx-auto w-full max-w-7xl px-4 pt-24 pb-16 md:px-8">
+                    <div class="max-w-xl">
+                      <span class="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-card/50 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-accent backdrop-blur-sm">
+                        Edición Costa Dorada
+                      </span>
+                      <h1 class="mt-6 text-balance font-heading text-5xl font-semibold leading-[1.05] text-primary sm:text-6xl md:text-7xl">
+                        El lujo del mar en tu piel
+                      </h1>
+                      <p class="mt-5 max-w-md text-pretty text-base leading-relaxed text-foreground/80 md:text-lg">
+                        Fragancias y cuidado corporal de alta gama inspirados en la brisa, la arena y los tesoros del océano. Descubre la colección Kavala.
+                      </p>
+                      <div class="mt-8 flex flex-wrap items-center gap-4">
+                        <a href="#main-catalog-section" class="group inline-flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-sm font-medium uppercase tracking-widest text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-accent hover:shadow-xl hover:shadow-accent/30">
+                          Comprar ahora <i data-lucide="arrow-right" class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"></i>
+                        </a>
+                        <a href="#lineas" class="inline-flex items-center gap-2 rounded-full border border-primary/30 px-8 py-4 text-sm font-medium uppercase tracking-widest text-primary transition-all duration-300 hover:border-primary hover:bg-primary hover:text-primary-foreground">
+                          Ver líneas
+                        </a>
+                      </div>
                     </div>
-                </div>
-                <div class="row" id="product-list-container"></div>
-            </div>
-        </section>
+                  </div>
+                </section>
 
-        ${renderFooter()}
+                <section id="lineas" class="py-24 bg-background">
+                    <div class="mx-auto max-w-7xl px-4 md:px-8">
+                        <div class="mb-12 flex flex-col items-center justify-between gap-4 md:flex-row md:items-end">
+                            <div>
+                                <h2 class="font-heading text-3xl font-semibold text-primary sm:text-4xl md:text-5xl">Nuestras Líneas</h2>
+                                <p class="mt-4 max-w-xl text-foreground/80">Descubre colecciones completas diseñadas para crear rutinas de cuidado perfectas.</p>
+                            </div>
+                        </div>
+                        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" id="product-lines-container"></div>
+                    </div>
+                </section>
+
+                <section id="main-catalog-section" class="py-24 bg-muted/30">
+                    <div class="mx-auto max-w-7xl px-4 md:px-8">
+                        <div class="mb-12 flex flex-col items-center justify-between gap-4 md:flex-row md:items-end" id="catalog-header-container">
+                            <div>
+                                <h2 class="font-heading text-3xl font-semibold text-primary sm:text-4xl md:text-5xl">Productos Destacados</h2>
+                                <p class="mt-4 max-w-xl text-foreground/80">Nuestros productos más populares para cuidar tu piel y dejar una estela inolvidable.</p>
+                            </div>
+                        </div>
+                        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" id="product-list-container"></div>
+                    </div>
+                </section>
+            </main>
+
+            ${renderFooter()}
+        </div>
     `;
+
+    // Initialize Lucide icons
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
 
     // Initialize UI plugins for cart (from ecometri template)
     if (typeof jQuery !== 'undefined') {
@@ -103,14 +145,23 @@ function renderProductLines() {
             if (p.imageUrl) images.push(getImageUrl(p.imageUrl));
         });
 
+        let tagline = l.description ? l.description : 'Envuelve tus sentidos en una experiencia única.';
+        let colClass = idx === 0 ? "sm:col-span-2 lg:col-span-1" : "";
         container.innerHTML += `
-            <div class="col-12 col-sm-6 col-md-4">
-                <div id="line-card-${l.id}" class="single_catagory_area d-flex align-items-center justify-content-center bg-img" style="background-image: url(${defaultBg}); cursor: pointer;" onclick="window.showProductLine(${l.id})">
-                    <div class="catagory-content">
-                        <a href="javascript:void(0)" onclick="event.preventDefault(); window.showProductLine(${l.id})">${l.name}</a>
-                    </div>
+            <a href="javascript:void(0)" id="line-card-${l.id}" onclick="event.preventDefault(); window.showProductLine(${l.id})" class="group relative overflow-hidden rounded-2xl ${colClass}">
+                <div class="relative aspect-[4/5] w-full bg-muted bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-105" style="background-image: url(${defaultBg});" id="line-card-bg-${l.id}">
+                  <div class="absolute inset-0 bg-gradient-to-t from-foreground/80 via-foreground/20 to-transparent transition-opacity duration-500 group-hover:from-foreground/90"></div>
                 </div>
-            </div>
+                <div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-6 pointer-events-none">
+                  <div>
+                    <h3 class="font-heading text-3xl font-semibold text-background">${l.name}</h3>
+                    <p class="mt-1 max-w-[18rem] text-sm leading-relaxed text-background/80">${tagline}</p>
+                  </div>
+                  <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-background/90 text-primary transition-all duration-300 group-hover:bg-accent group-hover:text-accent-foreground">
+                    <i data-lucide="arrow-up-right" class="h-5 w-5"></i>
+                  </span>
+                </div>
+            </a>
         `;
     });
 
@@ -126,11 +177,10 @@ function renderProductLines() {
 
         if (images.length > 1) {
             let imgIdx = 0;
-            const cardEl = document.getElementById(`line-card-${l.id}`);
+            const cardEl = document.getElementById(`line-card-bg-${l.id}`);
             const interval = setInterval(() => {
                 imgIdx = (imgIdx + 1) % images.length;
                 if (cardEl) {
-                    cardEl.style.transition = 'background-image 1s ease-in-out';
                     cardEl.style.backgroundImage = `url(${images[imgIdx]})`;
                 }
             }, 3000);
@@ -213,30 +263,48 @@ function renderProducts() {
             `;
         }
 
+        let productLineName = '';
+        if (p.productLineId) {
+            const lineObj = productLines.find(l => l.id === p.productLineId);
+            if (lineObj) productLineName = lineObj.name;
+        }
+
         container.innerHTML += `
-            <div class="col-12 col-sm-6 col-lg-4">
-                <div class="single-product-wrapper">
-                    <div class="product-img">
-                        <img id="prod-img-${p.id}" src="${mainImg}" data-main-img="${p.imageUrl ? getImageUrl(p.imageUrl) : 'img/product-img/product-1.jpg'}" alt="" style="height: 300px; object-fit: cover;">
-                    </div>
-                    <div class="product-description">
-                        <h6>${p.name}</h6>
-                        <p class="product-price" id="price-lbl-${p.id}">${priceStr}</p>
-                        ${variantsHtml}
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <span class="text-muted" style="font-size: 0.9em; font-weight: 500;">Cantidad:</span>
-                            <input type="number" id="qty-${p.id}" class="form-control text-center" value="1" min="1" style="width: 70px; padding: 0.2rem;">
-                        </div>
-                        <div class="hover-content">
-                            <div class="add-to-cart-btn">
-                                <button class="btn essence-btn w-100" onclick="window.addToCart(${p.id})">Añadir al Carrito</button>
-                            </div>
-                        </div>
+            <article class="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:-translate-y-1.5 hover:border-accent/50 hover:shadow-xl hover:shadow-primary/10">
+              <div class="relative aspect-[4/5] w-full overflow-hidden bg-muted">
+                <img id="prod-img-${p.id}" src="${mainImg}" data-main-img="${p.imageUrl ? getImageUrl(p.imageUrl) : 'img/product-img/product-1.jpg'}" alt="" class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105">
+                ${productLineName ? `<span class="absolute left-3 top-3 rounded-full bg-background/85 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-primary backdrop-blur-sm">${productLineName}</span>` : ''}
+              </div>
+
+              <div class="flex flex-1 flex-col p-5">
+                <h3 class="font-heading text-2xl font-semibold leading-tight text-primary">
+                  ${p.name}
+                </h3>
+                <p class="mt-1 text-sm text-muted-foreground" id="price-lbl-${p.id}">
+                  ${priceStr}
+                </p>
+
+                <div class="mt-4 flex flex-col gap-3 flex-1">
+                    ${variantsHtml}
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-muted-foreground">Cantidad:</span>
+                        <input type="number" id="qty-${p.id}" class="w-20 rounded-md border border-border bg-background px-3 py-1.5 text-center text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" value="1" min="1">
                     </div>
                 </div>
-            </div>
+
+                <button onclick="window.addToCart(${p.id})" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-secondary py-3 text-sm font-medium uppercase tracking-widest text-secondary-foreground transition-all duration-300 hover:bg-primary hover:text-primary-foreground">
+                  <i data-lucide="plus" class="h-4 w-4"></i>
+                  Añadir al carrito
+                </button>
+              </div>
+            </article>
         `;
     });
+
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
 }
 
 window.addToCart = function(productId) {
