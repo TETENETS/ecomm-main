@@ -1408,7 +1408,7 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
     
     for (const dd of sortedDueDates) {
       const quota = currentRemaining / remainingDatesCount;
-      if (paid >= quota - 0.01) {
+      if (paid >= quota - 0.005) {
         await prisma.orderDueDate.update({ where: { id: dd.id }, data: { isPaid: true } });
         paid -= quota;
         currentRemaining -= quota;
@@ -1423,7 +1423,7 @@ app.post('/api/orders/:id/abono', authMiddleware, async (req, res) => {
     console.log(`[ABONO] Orden #${order.id}: Abonado total: $${totalAbonadoUsd.toFixed(2)} / Total orden: $${orderTotal.toFixed(2)}`);
     
     let updateData = {};
-    if (totalAbonadoUsd >= orderTotal - 0.01) {
+    if (totalAbonadoUsd >= orderTotal - 0.005) {
       updateData = { 
         status: 'COMPLETED', 
         paymentMethod: paymentMethod || order.paymentMethod || 'Abono',
@@ -1530,7 +1530,7 @@ app.put('/api/orders/:id/abono/:abonoId', authMiddleware, async (req, res) => {
     
     for (const date of sortedDueDates) {
       const quota = currentRemaining / remainingDatesCount;
-      if (paid >= quota - 0.01) {
+      if (paid >= quota - 0.005) {
         await prisma.orderDueDate.update({ where: { id: date.id }, data: { isPaid: true } });
         paid -= quota;
         currentRemaining -= quota;
@@ -1542,7 +1542,7 @@ app.put('/api/orders/:id/abono/:abonoId', authMiddleware, async (req, res) => {
 
     // Re-check completion status
     let updateData = {};
-    if (totalAbonadoUsd >= parseFloat(order.totalAmount) - 0.01 && order.status !== 'COMPLETED') {
+    if (totalAbonadoUsd >= parseFloat(order.totalAmount) - 0.005 && order.status !== 'COMPLETED') {
       updateData = { status: 'COMPLETED' };
       // De-stock (deduct inventory)
       const orderItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });
@@ -1550,7 +1550,7 @@ app.put('/api/orders/:id/abono/:abonoId', authMiddleware, async (req, res) => {
         if (item.productVariantId) await prisma.productVariant.update({ where: { id: item.productVariantId }, data: { stock: { decrement: item.quantity } } });
         else await prisma.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } });
       }
-    } else if (totalAbonadoUsd < parseFloat(order.totalAmount) - 0.01 && order.status === 'COMPLETED') {
+    } else if (totalAbonadoUsd < parseFloat(order.totalAmount) - 0.005 && order.status === 'COMPLETED') {
       updateData = { status: 'PENDING_PAYMENT' };
       // Re-stock
       const orderItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });
