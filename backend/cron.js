@@ -129,17 +129,17 @@ const initCronJobs = () => {
     }
   });
 
-  // 3. Auto-cancelación de órdenes pendientes con más de 1 hora de antigüedad (Ejecutar cada 15 minutos)
+  // 3. Auto-cancelación de órdenes pendientes con más de 30 minutos de antigüedad (Ejecutar cada 15 minutos)
   cron.schedule('*/15 * * * *', async () => {
-    console.log('[CRON] Buscando órdenes pendientes vencidas (>1 hora)...');
+    console.log('[CRON] Buscando órdenes pendientes vencidas (>30 minutos)...');
     try {
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
       
       const staleOrders = await prisma.order.findMany({
         where: {
           status: 'PENDING',
           createdAt: {
-            lt: oneHourAgo
+            lt: thirtyMinutesAgo
           }
         },
         include: { items: true }

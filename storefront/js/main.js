@@ -178,7 +178,7 @@ function renderProducts() {
         lastRenderedLineId = currentLineId;
     }
 
-    let filteredProducts = products;
+    let filteredProducts = products.filter(p => p.stock > 0);
     if (currentLineId) {
         filteredProducts = filteredProducts.filter(p => p.productLineId === currentLineId);
     }
