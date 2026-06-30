@@ -129,6 +129,54 @@ const initCronJobs = () => {
     }
   });
 
+  // 3. Auto-cancelación de órdenes pendientes con más de 1 hora de antigüedad (Ejecutar cada 15 minutos)
+  cron.schedule('*/15 * * * *', async () => {
+    console.log('[CRON] Buscando órdenes pendientes vencidas (>1 hora)...');
+    try {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      
+      const staleOrders = await prisma.order.findMany({
+        where: {
+          status: 'PENDING',
+          createdAt: {
+            lt: oneHourAgo
+          }
+        },
+        include: { items: true }
+      });
+
+      if (staleOrders.length > 0) {
+        console.log(`[CRON] Se encontraron ${staleOrders.length} órdenes para auto-cancelar.`);
+        
+        for (const order of staleOrders) {
+          // Cambiar estado a CANCELED
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { status: 'CANCELED' }
+          });
+          
+          // Devolver stock
+          for (const item of order.items) {
+            if (item.productVariantId) {
+              await prisma.productVariant.update({
+                where: { id: item.productVariantId },
+                data: { stock: { increment: item.quantity } }
+              });
+            } else {
+              await prisma.product.update({
+                where: { id: item.productId },
+                data: { stock: { increment: item.quantity } }
+              });
+            }
+          }
+          console.log(`[CRON] Orden #${order.id} cancelada automáticamente (expirada) y stock restaurado.`);
+        }
+      }
+    } catch (err) {
+      console.error('[CRON] Error auto-cancelando órdenes:', err);
+    }
+  });
+
   console.log('[SYSTEM] Cron jobs inicializados.');
 };
 

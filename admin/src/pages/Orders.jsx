@@ -81,8 +81,11 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
   const selectedAccount = financeAccounts?.find(acc => acc.id === Number(selectedAccountId));
   const isEfectivo = selectedPaymentMethod.includes('Efectivo') || (selectedAccount?.name || '').toLowerCase().includes('efectivo');
 
+  const totalAbonado = order?.movements?.reduce((sum, m) => sum + (parseFloat(m.amount) || parseFloat(m.amountBs) / currentBcvRate), 0) || 0;
+  const isFullyPaid = totalAbonado >= parseFloat(order?.totalAmount || 0) - 0.01;
+
   const changeStatus = async (newStatus) => {
-    if (newStatus === 'COMPLETED' && (!showPaymentPrompt || !selectedAccountId || (!isEfectivo && !paymentReference))) {
+    if (newStatus === 'COMPLETED' && !isFullyPaid && (!showPaymentPrompt || !selectedAccountId || (!isEfectivo && !paymentReference))) {
       if (!showPaymentPrompt) {
         setShowPaymentPrompt(true);
         setShowPendingPaymentPrompt(false);
@@ -117,8 +120,8 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
         newStatus, 
         newStatus === 'PENDING_PAYMENT' ? editDueDates.filter(d => d) : undefined,
         newStatus === 'COMPLETED' ? selectedPaymentMethod : undefined,
-        newStatus === 'COMPLETED' ? selectedAccountId : undefined,
-        newStatus === 'COMPLETED' ? (!isEfectivo ? paymentReference : undefined) : undefined
+        newStatus === 'COMPLETED' ? (isFullyPaid ? undefined : selectedAccountId) : undefined,
+        newStatus === 'COMPLETED' ? (!isEfectivo && !isFullyPaid ? paymentReference : undefined) : undefined
       );
       setShowPaymentPrompt(false);
       setShowPendingPaymentPrompt(false);
@@ -532,7 +535,7 @@ const OrderModal = ({ order, onClose, onStatusChange, financeAccounts, onEdit, o
           )}
 
           {/* Acciones de estado */}
-          {order.status !== 'PENDING_PAYMENT' && (
+          {true && (
             <div className="border-t border-gray-100 pt-4">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Cambiar Estado</h3>
             
