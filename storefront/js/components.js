@@ -78,7 +78,7 @@ export function renderHeader() {
 
         <!-- Logo -->
         <a href="index.html" class="flex shrink-0 items-center">
-          <h2 class="text-2xl font-heading font-bold text-primary">Kavala</h2>
+          <img src="img/core-img/logo-kavala.png" alt="Kavala" class="h-10 w-auto md:h-12" onerror="this.onerror=null; this.outerHTML='<h2 class=\\'text-2xl font-heading font-bold text-primary\\'>Kavala</h2>';">
         </a>
 
         <!-- Desktop nav -->
@@ -141,7 +141,7 @@ export function renderFooter() {
         <div class="grid grid-cols-2 gap-10 md:grid-cols-4 lg:grid-cols-5">
           <!-- Brand -->
           <div class="col-span-2 lg:col-span-2">
-            <h2 class="text-3xl font-heading font-bold text-primary-foreground">Kavala</h2>
+            <img src="img/core-img/logo-kavala.png" alt="Kavala" class="h-14 w-auto mb-5" onerror="this.onerror=null; this.outerHTML='<h2 class=\\'text-3xl font-heading font-bold text-primary-foreground\\'>Kavala</h2>';">
             <p class="mt-5 max-w-xs text-pretty text-sm leading-relaxed text-primary-foreground/70">
               Cuidado corporal y fragancias de alta gama inspirados en la belleza del mar. Hecho con amor en Venezuela.
             </p>

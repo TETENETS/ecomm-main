@@ -25,26 +25,25 @@
 }
 
 :root {
-  color-scheme: light;
-  /* Kavala brand palette: #683a1d #9f6c3f #c2905f #deb180 #f7e0be */
-  --background: #fbf6ee;
-  --foreground: #3a2414;
-  --card: #ffffff;
-  --card-foreground: #3a2414;
-  --popover: #ffffff;
-  --popover-foreground: #3a2414;
-  --primary: #683a1d;
-  --primary-foreground: #fbf6ee;
-  --secondary: #f7e0be;
-  --secondary-foreground: #683a1d;
-  --muted: #f1e6d4;
-  --muted-foreground: #9f6c3f;
-  --accent: #c2905f;
-  --accent-foreground: #fbf6ee;
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: #e7d4bb;
-  --input: #e7d4bb;
-  --ring: #c2905f;
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: #c2905f; /* Gold accent from logo */
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: #c2905f; /* Gold accent */
   --radius: 0.5rem;
 }
 
