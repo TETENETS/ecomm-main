@@ -129,21 +129,48 @@ const initCronJobs = () => {
     }
   });
 
-  // 3. Auto-cancelación de órdenes pendientes con más de 30 minutos de antigüedad (Ejecutar cada 15 minutos)
-  cron.schedule('*/15 * * * *', async () => {
-    console.log('[CRON] Buscando órdenes pendientes vencidas (>30 minutos)...');
-    try {
-      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+  // Función auxiliar para determinar si la orden expiró según horario laboral (8 AM - 9 PM)
+  const isOrderExpired = (createdAtDate, currentTimeDate = new Date()) => {
+    // Zona horaria Caracas (UTC-4)
+    const offset = -4 * 60 * 60 * 1000;
+    const createdTz = new Date(createdAtDate.getTime() + offset);
+    const currentTz = new Date(currentTimeDate.getTime() + offset);
+
+    const hour = createdTz.getUTCHours();
+    const isBusinessHours = hour >= 8 && hour < 21;
+
+    if (isBusinessHours) {
+      // Dentro de horario laboral: Expira en 30 minutos
+      const expiration = new Date(createdAtDate.getTime() + 30 * 60 * 1000);
+      return currentTimeDate >= expiration;
+    } else {
+      // Fuera de horario laboral: Expira a las 8:30 AM del siguiente día hábil
+      let deadlineTz = new Date(createdTz);
+      if (hour >= 21) {
+        // Pedido de noche (después de 9 PM) => 8:30 AM del día siguiente
+        deadlineTz.setUTCDate(deadlineTz.getUTCDate() + 1);
+      }
+      // Pedido de madrugada (antes de 8 AM) => 8:30 AM del MISMO día (ya está en el mismo día)
       
-      const staleOrders = await prisma.order.findMany({
-        where: {
-          status: 'PENDING',
-          createdAt: {
-            lt: thirtyMinutesAgo
-          }
-        },
+      deadlineTz.setUTCHours(8, 30, 0, 0);
+      
+      // Convertir la fecha límite de vuelta a UTC absoluto
+      const deadlineAbsolute = new Date(deadlineTz.getTime() - offset);
+      return currentTimeDate >= deadlineAbsolute;
+    }
+  };
+
+  // 3. Auto-cancelación de órdenes pendientes según horario laboral (Ejecutar cada 15 minutos)
+  cron.schedule('*/15 * * * *', async () => {
+    console.log('[CRON] Buscando órdenes pendientes vencidas...');
+    try {
+      const pendingOrders = await prisma.order.findMany({
+        where: { status: 'PENDING' },
         include: { items: true }
       });
+      
+      const currentTime = new Date();
+      const staleOrders = pendingOrders.filter(order => isOrderExpired(order.createdAt, currentTime));
 
       if (staleOrders.length > 0) {
         console.log(`[CRON] Se encontraron ${staleOrders.length} órdenes para auto-cancelar.`);
