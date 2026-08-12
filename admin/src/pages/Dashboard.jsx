@@ -182,6 +182,328 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* --- SECCIÓN PERSONALIZACIÓN DE COLORES DE LA TIENDA CON LIVE PREVIEW CUADRADO --- */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <Palette className="text-blue-600" size={24} />
+              <h2 className="text-xl font-bold text-gray-800">Personalizador de Colores de la Tienda</h2>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              Modifica en tiempo real los colores de textos, fondos, barras, botones, bordes y placeholders del cliente.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              type="button" 
+              onClick={resetThemeToDefaults} 
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-sm flex items-center gap-2 transition-colors"
+            >
+              <RefreshCw size={16} /> Restablecer
+            </button>
+            <button 
+              type="button" 
+              onClick={handleSaveTheme} 
+              disabled={savingTheme}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+            >
+              {savingTheme ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+              {savingTheme ? 'Guardando...' : 'Guardar Colores'}
+            </button>
+          </div>
+        </div>
+
+        {themeSavedSuccess && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-800 rounded-xl flex items-center gap-3 text-sm font-bold">
+            <CheckCircle size={20} className="text-green-600 shrink-0" />
+            ¡Los colores se han guardado exitosamente y ya están activos en la tienda del cliente!
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* PANEL CONTROLES DE COLOR (7 Cols) */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* Categoría 1: Encabezado y Navegación */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div> 1. Barra de Encabezado (Header)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Fondo del Header</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_header_bg} onChange={e => handleColorChange('theme_header_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_header_bg} onChange={e => handleColorChange('theme_header_bg', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Texto y Enlaces</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_header_text} onChange={e => handleColorChange('theme_header_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_header_text} onChange={e => handleColorChange('theme_header_text', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Categoría 2: Banner Hero */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-amber-500"></div> 2. Banner Principal (Hero Section)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Título del Banner</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_title} onChange={e => handleColorChange('theme_hero_title', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_hero_title} onChange={e => handleColorChange('theme_hero_title', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Subtítulo del Banner</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_subtitle} onChange={e => handleColorChange('theme_hero_subtitle', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_hero_subtitle} onChange={e => handleColorChange('theme_hero_subtitle', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Botón Principal (Comprar ahora)</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_btn_bg} onChange={e => handleColorChange('theme_hero_btn_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Fondo" />
+                    <input type="color" value={theme.theme_hero_btn_text} onChange={e => handleColorChange('theme_hero_btn_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Texto" />
+                    <input type="color" value={theme.theme_hero_btn_border} onChange={e => handleColorChange('theme_hero_btn_border', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Borde" />
+                  </div>
+                  <span className="text-[10px] text-gray-400">Iconos: Fondo | Texto | Borde</span>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Botón Secundario (Ver líneas)</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_btn2_bg} onChange={e => handleColorChange('theme_hero_btn2_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Fondo" />
+                    <input type="color" value={theme.theme_hero_btn2_text} onChange={e => handleColorChange('theme_hero_btn2_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Texto" />
+                    <input type="color" value={theme.theme_hero_btn2_border} onChange={e => handleColorChange('theme_hero_btn2_border', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Borde" />
+                  </div>
+                  <span className="text-[10px] text-gray-400">Iconos: Fondo | Texto | Borde</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Categoría 3: Fondo, Tarjetas de Producto y Botón Carrito */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500"></div> 3. Tarjetas de Producto & Botones
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Fondo de Página</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_page_bg} onChange={e => handleColorChange('theme_page_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_page_bg} onChange={e => handleColorChange('theme_page_bg', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Fondo de Tarjeta</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_card_bg} onChange={e => handleColorChange('theme_card_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_card_bg} onChange={e => handleColorChange('theme_card_bg', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Título del Producto</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_card_title} onChange={e => handleColorChange('theme_card_title', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_card_title} onChange={e => handleColorChange('theme_card_title', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Precio del Producto</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_card_price} onChange={e => handleColorChange('theme_card_price', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_card_price} onChange={e => handleColorChange('theme_card_price', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-gray-600 font-semibold mb-1">Botón "Añadir al Carrito" (Fondo | Texto | Borde)</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_btn_cart_bg} onChange={e => handleColorChange('theme_btn_cart_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Fondo" />
+                    <input type="color" value={theme.theme_btn_cart_text} onChange={e => handleColorChange('theme_btn_cart_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Texto" />
+                    <input type="color" value={theme.theme_btn_cart_border} onChange={e => handleColorChange('theme_btn_cart_border', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Borde" />
+                    <span className="text-xs text-gray-500 self-center">Edita el botón de compra directa</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Categoría 4: Inputs y Placeholders */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-purple-500"></div> 4. Buscadores, Inputs & Placeholders
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Fondo de Input</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_input_bg} onChange={e => handleColorChange('theme_input_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Texto Digitado</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_input_text} onChange={e => handleColorChange('theme_input_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Relleno Placeholder</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_placeholder_text} onChange={e => handleColorChange('theme_placeholder_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Categoría 5: Footer */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-rose-500"></div> 5. Pie de Página (Footer)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Fondo del Footer</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_footer_bg} onChange={e => handleColorChange('theme_footer_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_footer_bg} onChange={e => handleColorChange('theme_footer_bg', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Texto del Footer</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_footer_text} onChange={e => handleColorChange('theme_footer_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_footer_text} onChange={e => handleColorChange('theme_footer_text', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* VISTA PREVIA EN VIVO (MINI PREVIEW CUADRADO EN TIEMPO REAL - 5 Cols) */}
+          <div className="lg:col-span-5">
+            <div className="sticky top-6 bg-gray-900 rounded-2xl p-4 shadow-xl border border-gray-800 text-white">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Monitor size={18} className="text-blue-400" />
+                  <span className="font-bold text-sm text-gray-200">Vista Previa en Vivo (Cuadrado)</span>
+                </div>
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-bold">En Vivo</span>
+              </div>
+
+              {/* MINI BROWSER PREVIEW FRAME */}
+              <div 
+                className="w-full rounded-xl overflow-hidden shadow-inner text-[11px] space-y-3 p-3 transition-colors duration-200 border border-white/10"
+                style={{ backgroundColor: theme.theme_page_bg }}
+              >
+                {/* Mini Header Bar */}
+                <div 
+                  className="rounded-lg p-2.5 flex items-center justify-between transition-colors shadow"
+                  style={{ backgroundColor: theme.theme_header_bg, color: theme.theme_header_text }}
+                >
+                  <div className="font-bold tracking-wider uppercase text-xs" style={{ color: theme.theme_hero_btn_bg }}>Kavala</div>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <span>Inicio</span>
+                    <span>Líneas</span>
+                    <span>Destacados</span>
+                  </div>
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white" style={{ backgroundColor: theme.theme_hero_btn_bg }}>
+                    🛒
+                  </div>
+                </div>
+
+                {/* Mini Hero Banner */}
+                <div className="relative rounded-lg p-4 bg-slate-950/80 border border-white/10 text-center space-y-2">
+                  <div className="font-serif font-bold text-base leading-tight drop-shadow" style={{ color: theme.theme_hero_title }}>
+                    El lujo del mar en tu piel
+                  </div>
+                  <p className="text-[10px] max-w-xs mx-auto opacity-90" style={{ color: theme.theme_hero_subtitle }}>
+                    Fragancias y cuidado corporal de alta gama.
+                  </p>
+                  <div className="flex justify-center gap-2 pt-1">
+                    <button 
+                      className="px-3 py-1 rounded-full font-bold text-[9px] shadow"
+                      style={{ 
+                        backgroundColor: theme.theme_hero_btn_bg, 
+                        color: theme.theme_hero_btn_text,
+                        borderColor: theme.theme_hero_btn_border,
+                        borderWidth: '1px'
+                      }}
+                    >
+                      Comprar ahora
+                    </button>
+                    <button 
+                      className="px-3 py-1 rounded-full font-bold text-[9px] shadow"
+                      style={{ 
+                        backgroundColor: theme.theme_hero_btn2_bg, 
+                        color: theme.theme_hero_btn2_text,
+                        borderColor: theme.theme_hero_btn2_border,
+                        borderWidth: '1px'
+                      }}
+                    >
+                      Ver líneas
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mini Product Search & Input */}
+                <div className="pt-1">
+                  <div 
+                    className="w-full p-2 rounded-lg border border-white/10 flex items-center justify-between text-[10px]"
+                    style={{ backgroundColor: theme.theme_input_bg }}
+                  >
+                    <span style={{ color: theme.theme_placeholder_text }}>Buscar productos... (Placeholder)</span>
+                    <Search size={12} style={{ color: theme.theme_placeholder_text }} />
+                  </div>
+                </div>
+
+                {/* Mini Product Card */}
+                <div 
+                  className="rounded-xl p-3 border border-white/10 shadow space-y-2"
+                  style={{ backgroundColor: theme.theme_card_bg }}
+                >
+                  <div className="h-20 w-full bg-slate-800 rounded-lg flex items-center justify-center text-slate-500 font-bold text-[10px]">
+                    Foto de Producto
+                  </div>
+                  <div className="font-bold text-xs" style={{ color: theme.theme_card_title }}>
+                    Body Splash Costa Dorada
+                  </div>
+                  <div className="font-bold text-xs" style={{ color: theme.theme_card_price }}>
+                    $24.00 / Bs. 1.200,00
+                  </div>
+                  <button 
+                    className="w-full py-1.5 rounded-full font-bold text-[10px] text-center shadow"
+                    style={{ 
+                      backgroundColor: theme.theme_btn_cart_bg, 
+                      color: theme.theme_btn_cart_text,
+                      borderColor: theme.theme_btn_cart_border,
+                      borderWidth: '1px'
+                    }}
+                  >
+                    + Añadir al carrito
+                  </button>
+                </div>
+
+                {/* Mini Footer */}
+                <div 
+                  className="rounded-lg p-2.5 text-center text-[9px] border-t border-white/5"
+                  style={{ backgroundColor: theme.theme_footer_bg, color: theme.theme_footer_text }}
+                >
+                  © 2026 Kavala. Todos los derechos reservados.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {closureSummary && Object.keys(closureSummary).length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
