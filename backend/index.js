@@ -236,6 +236,17 @@ app.post('/api/login', (req, res) => {
 });
 
 // --- PUBLIC STOREFRONT ENDPOINTS ---
+app.get('/api/public/settings', async (req, res) => {
+  try {
+    const settings = await prisma.setting.findMany();
+    const result = {};
+    settings.forEach(s => result[s.key] = s.value);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching public settings' });
+  }
+});
+
 app.get('/api/public/product-lines', async (req, res) => {
   try {
     const lines = await prisma.productLine.findMany({

@@ -10,10 +10,41 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  FileText
+  FileText,
+  Palette,
+  Save,
+  CheckCircle,
+  RefreshCw,
+  Layout,
+  Monitor
 } from 'lucide-react';
 
 import api from '../api';
+
+const defaultTheme = {
+  theme_header_bg: '#0f1115',
+  theme_header_text: '#ffffff',
+  theme_hero_title: '#ffffff',
+  theme_hero_subtitle: '#e2e8f0',
+  theme_hero_btn_bg: '#c2905f',
+  theme_hero_btn_text: '#ffffff',
+  theme_hero_btn_border: '#c2905f',
+  theme_hero_btn2_bg: '#1e293b',
+  theme_hero_btn2_text: '#ffffff',
+  theme_hero_btn2_border: '#ffffff',
+  theme_page_bg: '#0f1115',
+  theme_card_bg: '#181b21',
+  theme_card_title: '#f8fafc',
+  theme_card_price: '#c2905f',
+  theme_btn_cart_bg: '#c2905f',
+  theme_btn_cart_text: '#ffffff',
+  theme_btn_cart_border: '#c2905f',
+  theme_input_bg: '#0f1115',
+  theme_input_text: '#f8fafc',
+  theme_placeholder_text: '#94a3b8',
+  theme_footer_bg: '#0f1115',
+  theme_footer_text: '#94a3b8'
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -22,12 +53,16 @@ const Dashboard = () => {
   const [pendingOrders, setPendingOrders] = useState([]);
   const [closureSummary, setClosureSummary] = useState(null);
   
+  // Theme Color Customization State
+  const [theme, setTheme] = useState(defaultTheme);
+  const [savingTheme, setSavingTheme] = useState(false);
+  const [themeSavedSuccess, setThemeSavedSuccess] = useState(false);
+
   // Paginación para órdenes pendientes
   const [currentPage, setCurrentPage] = useState(1);
   const ordersPerPage = 10;
 
   useEffect(() => {
-    // Simulamos la obtención de datos completos para el dashboard
     fetchDashboardData();
   }, []);
 
@@ -39,16 +74,51 @@ const Dashboard = () => {
         setSalesByLine(res.data.salesByLine || []);
         setPendingOrders(res.data.pendingOrders || []);
       } else {
-        // Fallback for older backend
         setMetrics(res.data);
       }
 
-      // Fetch Vista General / Cierre
       const today = new Date().toISOString().split('T')[0];
       const sRes = await api.get(`/closure/summary?date=${today}`);
       setClosureSummary(sRes.data);
+
+      // Fetch theme settings
+      const settingsRes = await api.get('/settings');
+      if (settingsRes.data) {
+        const loadedTheme = { ...defaultTheme };
+        Object.keys(defaultTheme).forEach(key => {
+          if (settingsRes.data[key]) {
+            loadedTheme[key] = settingsRes.data[key];
+          }
+        });
+        setTheme(loadedTheme);
+      }
     } catch (e) {
       console.error("Error fetching dashboard data:", e);
+    }
+  };
+
+  const handleColorChange = (key, value) => {
+    setTheme(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveTheme = async () => {
+    setSavingTheme(true);
+    setThemeSavedSuccess(false);
+    try {
+      await api.put('/settings', theme);
+      setThemeSavedSuccess(true);
+      setTimeout(() => setThemeSavedSuccess(false), 3000);
+    } catch (err) {
+      console.error(err);
+      alert('Error guardando la configuración de colores.');
+    } finally {
+      setSavingTheme(false);
+    }
+  };
+
+  const resetThemeToDefaults = () => {
+    if (window.confirm("¿Restablecer los colores del tema a los valores por defecto?")) {
+      setTheme(defaultTheme);
     }
   };
 
@@ -83,7 +153,7 @@ const Dashboard = () => {
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-green-200 transition-all">
           <div>
-            <h3 className="text-sm font-bold text-gray-500 mb-1">Pedidos Totales</h3>
+            <h3 className="text-sm font-bold text-gray-500 mb-1">Total Pedidos</h3>
             <p className="text-3xl font-black text-gray-800">{metrics.totalOrders}</p>
           </div>
           <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
@@ -91,23 +161,23 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-red-200 transition-all">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-amber-200 transition-all">
           <div>
-            <h3 className="text-sm font-bold text-gray-500 mb-1">Gastos / Compras</h3>
-            <p className="text-3xl font-black text-gray-800">${metrics.totalExpenses.toLocaleString()}</p>
+            <h3 className="text-sm font-bold text-gray-500 mb-1">Total Productos</h3>
+            <p className="text-3xl font-black text-gray-800">{metrics.totalProducts}</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-600 group-hover:scale-110 transition-transform">
-            <TrendingUp size={24} className="rotate-180" />
+          <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
+            <Package size={24} />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-teal-200 transition-all">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-purple-200 transition-all">
           <div>
-            <h3 className="text-sm font-bold text-gray-500 mb-1">Prod. en Almacén</h3>
-            <p className="text-3xl font-black text-gray-800">{metrics.totalProducts}</p>
+            <h3 className="text-sm font-bold text-gray-500 mb-1">Gastos Totales</h3>
+            <p className="text-3xl font-black text-gray-800">${(metrics.totalExpenses || 0).toLocaleString()}</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 group-hover:scale-110 transition-transform">
-            <Package size={24} />
+          <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
+            <TrendingUp size={24} />
           </div>
         </div>
       </div>

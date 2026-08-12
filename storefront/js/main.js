@@ -8,7 +8,55 @@ let searchQuery = '';
 let filterCategoryId = '';
 let slideIntervals = [];
 
+async function loadThemeSettings() {
+    try {
+        const res = await fetch(`${API_URL}/public/settings`);
+        const settings = await res.json();
+        if (settings) {
+            const root = document.documentElement;
+            if (settings.theme_page_bg) root.style.setProperty('--background', settings.theme_page_bg);
+            if (settings.theme_card_bg) root.style.setProperty('--card', settings.theme_card_bg);
+            if (settings.theme_header_bg) root.style.setProperty('--theme-header-bg', settings.theme_header_bg);
+            if (settings.theme_header_text) root.style.setProperty('--theme-header-text', settings.theme_header_text);
+            if (settings.theme_hero_title) root.style.setProperty('--theme-hero-title', settings.theme_hero_title);
+            if (settings.theme_hero_subtitle) root.style.setProperty('--theme-hero-subtitle', settings.theme_hero_subtitle);
+            if (settings.theme_hero_btn_bg) root.style.setProperty('--theme-hero-btn-bg', settings.theme_hero_btn_bg);
+            if (settings.theme_hero_btn_text) root.style.setProperty('--theme-hero-btn-text', settings.theme_hero_btn_text);
+            if (settings.theme_hero_btn_border) root.style.setProperty('--theme-hero-btn-border', settings.theme_hero_btn_border);
+            if (settings.theme_hero_btn2_bg) root.style.setProperty('--theme-hero-btn2-bg', settings.theme_hero_btn2_bg);
+            if (settings.theme_hero_btn2_text) root.style.setProperty('--theme-hero-btn2-text', settings.theme_hero_btn2_text);
+            if (settings.theme_hero_btn2_border) root.style.setProperty('--theme-hero-btn2-border', settings.theme_hero_btn2_border);
+            if (settings.theme_card_title) root.style.setProperty('--theme-card-title', settings.theme_card_title);
+            if (settings.theme_card_price) root.style.setProperty('--theme-card-price', settings.theme_card_price);
+            if (settings.theme_btn_cart_bg) root.style.setProperty('--theme-btn-cart-bg', settings.theme_btn_cart_bg);
+            if (settings.theme_btn_cart_text) root.style.setProperty('--theme-btn-cart-text', settings.theme_btn_cart_text);
+            if (settings.theme_btn_cart_border) root.style.setProperty('--theme-btn-cart-border', settings.theme_btn_cart_border);
+            if (settings.theme_input_bg) root.style.setProperty('--theme-input-bg', settings.theme_input_bg);
+            if (settings.theme_input_text) root.style.setProperty('--theme-input-text', settings.theme_input_text);
+            if (settings.theme_placeholder_text) root.style.setProperty('--theme-placeholder-text', settings.theme_placeholder_text);
+            if (settings.theme_footer_bg) root.style.setProperty('--theme-footer-bg', settings.theme_footer_bg);
+            if (settings.theme_footer_text) root.style.setProperty('--theme-footer-text', settings.theme_footer_text);
+            
+            let styleTag = document.getElementById('dynamic-theme-styles');
+            if (!styleTag) {
+                styleTag = document.createElement('style');
+                styleTag.id = 'dynamic-theme-styles';
+                document.head.appendChild(styleTag);
+            }
+            styleTag.innerHTML = `
+                ::placeholder { color: var(--theme-placeholder-text, #94a3b8) !important; opacity: 1 !important; }
+                ::-webkit-input-placeholder { color: var(--theme-placeholder-text, #94a3b8) !important; }
+                ::-moz-placeholder { color: var(--theme-placeholder-text, #94a3b8) !important; }
+                input, select { background-color: var(--theme-input-bg, #0f1115) !important; color: var(--theme-input-text, #f8fafc) !important; }
+            `;
+        }
+    } catch (err) {
+        console.error('Error loading public theme settings:', err);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    loadThemeSettings();
     const app = document.getElementById('app');
     
     // Layout Base
@@ -19,26 +67,26 @@ document.addEventListener('DOMContentLoaded', () => {
             
             <main class="flex-1">
                 <!-- Hero Section -->
-                <section id="inicio" class="relative -mt-[68px] flex min-h-[88vh] items-center overflow-hidden md:-mt-[80px]">
-                  <img src="img/bg-img/bg-1.jpg" class="object-cover absolute inset-0 w-full h-full" alt="" />
-                  <div class="absolute inset-0 bg-gradient-to-r from-background/95 via-background/70 to-background/20"></div>
-                  <div class="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"></div>
-                  <div class="relative mx-auto w-full max-w-7xl px-4 pt-24 pb-16 md:px-8">
-                    <div class="max-w-xl">
-                      <span class="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-card/50 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-accent backdrop-blur-sm">
+                <section id="inicio" class="relative -mt-[68px] flex min-h-[88vh] items-center overflow-hidden md:-mt-[80px] bg-[#0f1115]">
+                  <img src="img/bg-img/bg-1.jpg" class="object-cover absolute inset-0 w-full h-full object-right md:object-center opacity-90" alt="Hero background" />
+                  <div class="absolute inset-0 bg-gradient-to-r from-[#0f1115] via-[#0f1115]/90 to-[#0f1115]/20"></div>
+                  <div class="absolute inset-0 bg-gradient-to-t from-[#0f1115] via-transparent to-transparent"></div>
+                  <div class="relative mx-auto w-full max-w-7xl px-4 pt-28 pb-16 md:px-8">
+                    <div class="max-w-xl rounded-3xl bg-slate-950/70 p-6 md:p-8 backdrop-blur-md border border-white/10 shadow-2xl">
+                      <span class="inline-flex items-center gap-2 rounded-full border border-[#c2905f]/40 bg-[#c2905f]/15 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-[#c2905f]">
                         Edición Costa Dorada
                       </span>
-                      <h1 class="mt-6 text-balance font-heading text-5xl font-semibold leading-[1.05] text-primary sm:text-6xl md:text-7xl">
+                      <h1 class="mt-4 font-heading text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl drop-shadow">
                         El lujo del mar en tu piel
                       </h1>
-                      <p class="mt-5 max-w-md text-pretty text-base leading-relaxed text-foreground/80 md:text-lg">
+                      <p class="mt-4 max-w-md text-base leading-relaxed text-slate-200 md:text-lg">
                         Fragancias y cuidado corporal de alta gama inspirados en la brisa, la arena y los tesoros del océano. Descubre la colección Kavala.
                       </p>
                       <div class="mt-8 flex flex-wrap items-center gap-4">
-                        <a href="#main-catalog-section" class="group inline-flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-sm font-medium uppercase tracking-widest text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-accent hover:shadow-xl hover:shadow-accent/30">
+                        <a href="#main-catalog-section" class="group inline-flex items-center gap-2 rounded-full bg-[#c2905f] hover:bg-[#d4a373] px-7 py-3.5 text-xs md:text-sm font-bold uppercase tracking-widest text-white shadow-xl shadow-[#c2905f]/30 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
                           Comprar ahora <i data-lucide="arrow-right" class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"></i>
                         </a>
-                        <a href="#lineas" class="inline-flex items-center gap-2 rounded-full border border-primary/30 px-8 py-4 text-sm font-medium uppercase tracking-widest text-primary transition-all duration-300 hover:border-primary hover:bg-primary hover:text-primary-foreground">
+                        <a href="#lineas" class="inline-flex items-center gap-2 rounded-full border-2 border-white/80 hover:border-[#c2905f] bg-slate-900/80 hover:bg-[#c2905f] px-7 py-3.5 text-xs md:text-sm font-bold uppercase tracking-widest text-white transition-all duration-300 shadow-lg cursor-pointer">
                           Ver líneas
                         </a>
                       </div>
