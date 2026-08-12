@@ -238,7 +238,9 @@ app.post('/api/login', (req, res) => {
 // --- PUBLIC STOREFRONT ENDPOINTS ---
 app.get('/api/public/product-lines', async (req, res) => {
   try {
-    const lines = await prisma.productLine.findMany();
+    const lines = await prisma.productLine.findMany({
+      orderBy: [{ priority: 'asc' }, { name: 'asc' }]
+    });
     res.json(lines);
   } catch (error) {
     res.status(500).json({ error: 'Error fetching product lines' });
@@ -316,7 +318,10 @@ app.delete('/api/categories/:id', authMiddleware, async (req, res) => {
 // --- PRODUCT LINES ---
 app.get('/api/product-lines', authMiddleware, async (req, res) => {
   try {
-    const lines = await prisma.productLine.findMany({ include: { products: true } });
+    const lines = await prisma.productLine.findMany({ 
+      include: { products: true },
+      orderBy: [{ priority: 'asc' }, { name: 'asc' }]
+    });
     res.json(lines);
   } catch (error) {
     res.status(500).json({ error: 'Error fetching product lines' });
@@ -327,11 +332,13 @@ app.post('/api/product-lines', authMiddleware, upload.any(), async (req, res) =>
   try {
     const file = req.files && req.files.find(f => f.fieldname === 'image');
     const imageUrl = file ? `/uploads/${file.filename}` : null;
+    const priorityVal = req.body.priority ? parseInt(req.body.priority, 10) : 1;
     const line = await prisma.productLine.create({ 
       data: { 
         name: req.body.name, 
         description: req.body.description,
-        imageUrl: imageUrl
+        imageUrl: imageUrl,
+        priority: isNaN(priorityVal) ? 1 : priorityVal
       } 
     });
     res.status(201).json(line);
@@ -344,6 +351,10 @@ app.put('/api/product-lines/:id', authMiddleware, upload.any(), async (req, res)
   try {
     const file = req.files && req.files.find(f => f.fieldname === 'image');
     const dataToUpdate = { name: req.body.name, description: req.body.description };
+    if (req.body.priority !== undefined) {
+      const priorityVal = parseInt(req.body.priority, 10);
+      dataToUpdate.priority = isNaN(priorityVal) ? 1 : priorityVal;
+    }
     if (file) {
       dataToUpdate.imageUrl = `/uploads/${file.filename}`;
     }

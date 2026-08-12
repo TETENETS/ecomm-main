@@ -47,6 +47,7 @@ const Inventory = () => {
   const [lineName, setLineName] = useState('');
   const [lineDescription, setLineDescription] = useState('');
   const [lineImage, setLineImage] = useState(null);
+  const [linePriority, setLinePriority] = useState(1);
   const [editingLineId, setEditingLineId] = useState(null);
 
   // Stock Lots History State
@@ -99,6 +100,7 @@ const Inventory = () => {
       const formData = new FormData();
       formData.append('name', lineName);
       formData.append('description', lineDescription);
+      formData.append('priority', linePriority);
       if (lineImage) formData.append('image', lineImage);
 
       if (editingLineId) {
@@ -111,6 +113,7 @@ const Inventory = () => {
       setLineName('');
       setLineDescription('');
       setLineImage(null);
+      setLinePriority(1);
       setEditingLineId(null);
       fetchData();
     } catch {
@@ -124,6 +127,7 @@ const Inventory = () => {
     setEditingLineId(line.id);
     setLineName(line.name);
     setLineDescription(line.description || '');
+    setLinePriority(line.priority !== undefined ? line.priority : 1);
     setLineImage(null);
     setShowLineModal(true);
   };
@@ -362,8 +366,15 @@ const Inventory = () => {
     return true;
   });
 
-  // Group products by line for the UI
-  const groupedProducts = productLines.map(line => ({
+  // Group products by line for the UI sorted by priority (1 to 10) then name
+  const sortedProductLines = [...productLines].sort((a, b) => {
+    const pA = a.priority !== undefined ? a.priority : 1;
+    const pB = b.priority !== undefined ? b.priority : 1;
+    if (pA !== pB) return pA - pB;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  const groupedProducts = sortedProductLines.map(line => ({
     ...line,
     items: products.filter(p => p.productLineId === line.id)
   }));
@@ -380,7 +391,7 @@ const Inventory = () => {
           <button onClick={() => { setCategoryName(''); setCategoryDescription(''); setEditingCategoryId(null); setShowCategoryModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
             <Folder size={20} /> Categorías
           </button>
-          <button onClick={() => { setEditingLineId(null); setLineName(''); setLineDescription(''); setLineImage(null); setShowLineModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
+          <button onClick={() => { setEditingLineId(null); setLineName(''); setLineDescription(''); setLineImage(null); setLinePriority(1); setShowLineModal(true); }} className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-sm">
             <Folder size={20} /> Nueva Línea
           </button>
           <button onClick={() => { setShowStockModal(true); }} className="bg-green-100 text-green-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-green-200 transition-colors shadow-sm">
@@ -404,6 +415,14 @@ const Inventory = () => {
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre *</label>
                 <input required value={lineName} onChange={e => setLineName(e.target.value)} className="w-full bg-gray-50 border p-3 rounded-xl outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Prioridad (1 = Más Importante, 10 = Menos Importante) *</label>
+                <select value={linePriority} onChange={e => setLinePriority(parseInt(e.target.value))} className="w-full bg-gray-50 border p-3 rounded-xl outline-none font-bold text-gray-700">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(p => (
+                    <option key={p} value={p}>Prioridad {p} {p === 1 ? '(1 - Máxima Prioridad)' : p === 10 ? '(10 - Mínima Prioridad)' : ''}</option>
+                  ))}
+                </select>
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
@@ -771,6 +790,11 @@ const Inventory = () => {
                   </button>
                   <Folder size={20} className="text-gray-400" />
                   <span className="font-bold text-gray-800 text-base">{line.name}</span>
+                  {line.id !== 'unassigned' && (
+                    <span className="text-xs bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
+                      Prioridad: {line.priority !== undefined ? line.priority : 1}
+                    </span>
+                  )}
                   <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-bold">{line.items.length} prod.</span>
                 </div>
                 {line.id !== 'unassigned' && (

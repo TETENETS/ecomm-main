@@ -106,6 +106,14 @@ async function loadData() {
         products = await prodsRes.json();
         categories = await catsRes.json();
 
+        // Sort product lines by priority numerical order (1 = highest priority) then name A-Z
+        productLines.sort((a, b) => {
+            const pA = a.priority !== undefined ? a.priority : 1;
+            const pB = b.priority !== undefined ? b.priority : 1;
+            if (pA !== pB) return pA - pB;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
         // Sort products by category A-Z initially
         products.sort((a, b) => {
             const catA = a.category ? a.category.name.toLowerCase() : 'zzz';
@@ -198,12 +206,14 @@ function renderProducts() {
 
     if (lastRenderedLineId !== currentLineId) {
         let filtersHtml = `
-            <div class="row mb-4 mt-4 justify-content-center" style="max-width: 800px; margin: 0 auto;">
-                <div class="col-12 d-flex gap-2" style="gap: 10px;">
-                    <input type="text" id="storeSearch" class="form-control" placeholder="Buscar productos..." value="${searchQuery}" onkeyup="window.updateFilters()">
-                    <select id="storeCategory" class="form-control" onchange="window.updateFilters()">
-                        <option value="">Todas las Categorías</option>
-                        ${categories.map(c => `<option value="${c.id}" ${filterCategoryId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+            <div class="flex flex-col sm:flex-row gap-3 w-full max-w-2xl mx-auto my-6">
+                <div class="relative flex-1">
+                    <input type="text" id="storeSearch" class="w-full rounded-xl border border-white/15 bg-slate-900/90 px-4 py-3 text-sm text-slate-100 placeholder-slate-400 focus:border-[#c2905f] focus:outline-none focus:ring-1 focus:ring-[#c2905f] shadow-inner" placeholder="Buscar productos..." value="${searchQuery}" onkeyup="window.updateFilters()">
+                </div>
+                <div class="w-full sm:w-64">
+                    <select id="storeCategory" class="w-full rounded-xl border border-white/15 bg-slate-900/90 px-4 py-3 text-sm text-slate-100 focus:border-[#c2905f] focus:outline-none focus:ring-1 focus:ring-[#c2905f] shadow-inner" onchange="window.updateFilters()">
+                        <option value="" class="bg-slate-900 text-slate-100">Todas las Categorías</option>
+                        ${categories.map(c => `<option value="${c.id}" ${filterCategoryId == c.id ? 'selected' : ''} class="bg-slate-900 text-slate-100">${c.name}</option>`).join('')}
                     </select>
                 </div>
             </div>
@@ -214,16 +224,28 @@ function renderProducts() {
             let bannerBg = line && line.imageUrl ? getImageUrl(line.imageUrl) : 'img/bg-img/bg-2.jpg';
             
             headerContainer.innerHTML = `
-                <div style="width: 100%; height: 300px; background-image: url(${bannerBg}); background-size: cover; background-position: center; border-radius: 15px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.3);">
-                    <div style="padding: 20px 40px; border-radius: 10px;">
-                        <h2 style="color: white; margin: 0; font-size: 3rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">${line ? line.name : 'Línea de Producto'}</h2>
+                <div class="w-full flex flex-col items-center mb-6">
+                    <div style="width: 100%; min-height: 250px; background-image: url(${bannerBg}); background-size: cover; background-position: center; border-radius: 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;" class="shadow-2xl">
+                        <div style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,17,21,0.9), rgba(15,17,21,0.4));"></div>
+                        <div style="position: relative; z-index: 10; text-align: center; padding: 30px 20px;">
+                            <h2 class="font-heading text-4xl sm:text-5xl font-bold text-white tracking-wide drop-shadow-md">${line ? line.name : 'Línea de Producto'}</h2>
+                            ${line && line.description ? `<p class="mt-2 text-slate-200 text-sm max-w-lg mx-auto leading-relaxed">${line.description}</p>` : ''}
+                        </div>
                     </div>
+                    <button class="inline-flex items-center gap-2 rounded-full bg-[#c2905f] hover:bg-[#d4a373] text-white px-7 py-3 text-xs md:text-sm font-semibold uppercase tracking-widest transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 cursor-pointer mb-2" onclick="window.showAllProducts()">
+                        <i data-lucide="arrow-left" class="h-4 w-4"></i> Volver al Catálogo Completo
+                    </button>
+                    ${filtersHtml}
                 </div>
-                <button class="btn essence-btn mb-4" onclick="window.showAllProducts()">← Volver al Catálogo Completo</button>
-                ${filtersHtml}
             `;
         } else {
-            headerContainer.innerHTML = `<h2>Catálogo de Productos</h2> ${filtersHtml}`;
+            headerContainer.innerHTML = `
+                <div class="w-full text-center md:text-left mb-4">
+                    <h2 class="font-heading text-3xl font-semibold text-slate-100 sm:text-4xl md:text-5xl">Catálogo de Productos</h2>
+                    <p class="mt-2 text-slate-300 text-sm md:text-base">Explora nuestra colección exclusiva de fragancias y cuidado personal.</p>
+                </div>
+                ${filtersHtml}
+            `;
         }
         lastRenderedLineId = currentLineId;
     }
@@ -256,9 +278,9 @@ function renderProducts() {
             priceUsd = Number(p.variants[0].price);
             priceStr = `$${priceUsd.toFixed(2)} / Bs. ${(priceUsd * window.tasaBCV).toFixed(2)}`;
             variantsHtml = `
-                <select id="var-${p.id}" class="form-control mb-2" onchange="window.changeVariant(${p.id})">
-                    <option value="" disabled selected>Seleccionar</option>
-                    ${p.variants.map(v => `<option value="${v.id}" data-price="${v.price}" data-img="${v.imageUrl || ''}">${v.name} - $${Number(v.price).toFixed(2)}</option>`).join('')}
+                <select id="var-${p.id}" class="w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:border-[#c2905f] focus:outline-none mb-2" onchange="window.changeVariant(${p.id})">
+                    <option value="" disabled selected class="bg-slate-900 text-slate-400">Seleccionar variante...</option>
+                    ${p.variants.map(v => `<option value="${v.id}" data-price="${v.price}" data-img="${v.imageUrl || ''}" class="bg-slate-900 text-slate-100">${v.name} - $${Number(v.price).toFixed(2)}</option>`).join('')}
                 </select>
             `;
         }
@@ -270,17 +292,17 @@ function renderProducts() {
         }
 
         container.innerHTML += `
-            <article class="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:-translate-y-1.5 hover:border-accent/50 hover:shadow-xl hover:shadow-primary/10">
-              <div class="relative aspect-[4/5] w-full overflow-hidden bg-muted">
+            <article class="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#181b21] transition-all duration-300 hover:-translate-y-1.5 hover:border-[#c2905f]/50 hover:shadow-xl hover:shadow-[#c2905f]/10">
+              <div class="relative aspect-[4/5] w-full overflow-hidden bg-slate-900">
                 <img id="prod-img-${p.id}" src="${mainImg}" data-main-img="${p.imageUrl ? getImageUrl(p.imageUrl) : 'img/product-img/product-1.jpg'}" alt="" class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105">
-                ${productLineName ? `<span class="absolute left-3 top-3 rounded-full bg-background/85 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-primary backdrop-blur-sm">${productLineName}</span>` : ''}
+                ${productLineName ? `<span class="absolute left-3 top-3 rounded-full bg-slate-900/90 border border-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#c2905f] backdrop-blur-md shadow">${productLineName}</span>` : ''}
               </div>
 
               <div class="flex flex-1 flex-col p-5">
-                <h3 class="font-heading text-2xl font-semibold leading-tight text-primary">
+                <h3 class="font-heading text-2xl font-semibold leading-tight text-slate-100">
                   ${p.name}
                 </h3>
-                <p class="mt-1 text-sm text-muted-foreground" id="price-lbl-${p.id}">
+                <p class="mt-1 text-sm font-medium text-[#c2905f]" id="price-lbl-${p.id}">
                   ${priceStr}
                 </p>
 
@@ -288,12 +310,12 @@ function renderProducts() {
                     ${variantsHtml}
                     
                     <div class="flex items-center justify-between">
-                        <span class="text-sm font-medium text-muted-foreground">Cantidad:</span>
-                        <input type="number" id="qty-${p.id}" class="w-20 rounded-md border border-border bg-background px-3 py-1.5 text-center text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" value="1" min="1">
+                        <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Cantidad:</span>
+                        <input type="number" id="qty-${p.id}" class="w-20 rounded-lg border border-white/15 bg-slate-900 px-3 py-1.5 text-center text-sm font-bold text-slate-100 focus:border-[#c2905f] focus:outline-none" value="1" min="1">
                     </div>
                 </div>
 
-                <button onclick="window.addToCart(${p.id})" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-secondary py-3 text-sm font-medium uppercase tracking-widest text-secondary-foreground transition-all duration-300 hover:bg-primary hover:text-primary-foreground">
+                <button onclick="window.addToCart(${p.id})" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#c2905f] hover:bg-[#d4a373] py-3 text-xs font-semibold uppercase tracking-widest text-white transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer">
                   <i data-lucide="plus" class="h-4 w-4"></i>
                   Añadir al carrito
                 </button>

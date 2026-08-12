@@ -12,6 +12,7 @@ model ProductLine {
   name        String
   description String?
   imageUrl    String?
+  priority    Int       @default(1)
   products    Product[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

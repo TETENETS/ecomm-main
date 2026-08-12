@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { await prisma.order.update({where:{id:1}, data:{status:'COMPLETED'}}); } main().then(()=>process.exit(0));
