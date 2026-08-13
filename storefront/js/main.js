@@ -30,6 +30,10 @@ async function loadThemeSettings() {
             if (settings.theme_hero_badge_text) root.style.setProperty('--theme-hero-badge-text', settings.theme_hero_badge_text);
             if (settings.theme_hero_card_bg) root.style.setProperty('--theme-hero-card-bg', settings.theme_hero_card_bg);
             if (settings.theme_hero_card_border) root.style.setProperty('--theme-hero-card-border', settings.theme_hero_card_border);
+            if (settings.theme_hero_overlay_from) root.style.setProperty('--theme-hero-overlay-from', settings.theme_hero_overlay_from);
+            if (settings.theme_hero_overlay_via) root.style.setProperty('--theme-hero-overlay-via', settings.theme_hero_overlay_via);
+            if (settings.theme_hero_overlay_to) root.style.setProperty('--theme-hero-overlay-to', settings.theme_hero_overlay_to);
+            if (settings.theme_hero_overlay_bottom) root.style.setProperty('--theme-hero-overlay-bottom', settings.theme_hero_overlay_bottom);
             if (settings.theme_card_title) root.style.setProperty('--theme-card-title', settings.theme_card_title);
             if (settings.theme_card_price) root.style.setProperty('--theme-card-price', settings.theme_card_price);
             if (settings.theme_btn_cart_bg) root.style.setProperty('--theme-btn-cart-bg', settings.theme_btn_cart_bg);
@@ -82,8 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <!-- Hero Section -->
                 <section id="inicio" class="relative -mt-[68px] flex min-h-[88vh] items-center overflow-hidden md:-mt-[80px]" style="background-color: var(--theme-page-bg, #0f1115);">
                   <img id="hero-bg-img" src="img/bg-img/bg-1.jpg" class="object-cover absolute inset-0 w-full h-full object-right md:object-center opacity-90 transition-all duration-300" alt="Hero background" />
-                  <div class="absolute inset-0 bg-gradient-to-r from-[#0f1115] via-[#0f1115]/90 to-[#0f1115]/20"></div>
-                  <div class="absolute inset-0 bg-gradient-to-t from-[#0f1115] via-transparent to-transparent"></div>
+                  <div id="hero-overlay-horizontal" class="absolute inset-0 pointer-events-none transition-all duration-300" style="background: linear-gradient(to right, var(--theme-hero-overlay-from, #0f1115), var(--theme-hero-overlay-via, rgba(15, 17, 21, 0.9)), var(--theme-hero-overlay-to, rgba(15, 17, 21, 0.2)));"></div>
+                  <div id="hero-overlay-vertical" class="absolute inset-0 pointer-events-none transition-all duration-300" style="background: linear-gradient(to top, var(--theme-hero-overlay-bottom, #0f1115), transparent);"></div>
                   <div class="relative mx-auto w-full max-w-7xl px-4 pt-28 pb-16 md:px-8">
                     <div id="hero-glass-card" class="max-w-xl rounded-3xl p-6 md:p-8 backdrop-blur-md shadow-2xl transition-all" style="background-color: var(--theme-hero-card-bg, rgba(2, 6, 23, 0.7)); border: 1px solid var(--theme-hero-card-border, rgba(255, 255, 255, 0.1));">
                       <span id="hero-badge" class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] transition-all" style="background-color: var(--theme-hero-badge-bg, rgba(194, 144, 95, 0.15)); color: var(--theme-hero-badge-text, #c2905f); border: 1px solid var(--theme-hero-badge-text, #c2905f);">

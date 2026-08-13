@@ -39,6 +39,10 @@ const defaultTheme = {
   theme_hero_badge_text: '#c2905f',
   theme_hero_card_bg: '#020617b3',
   theme_hero_card_border: '#ffffff1a',
+  theme_hero_overlay_from: '#0f1115',
+  theme_hero_overlay_via: '#0f1115e6',
+  theme_hero_overlay_to: '#0f111533',
+  theme_hero_overlay_bottom: '#0f1115',
   theme_hero_title: '#ffffff',
   theme_hero_subtitle: '#e2e8f0',
   theme_hero_btn_bg: '#c2905f',
@@ -330,6 +334,43 @@ const Dashboard = () => {
                 </div>
               </div>
 
+              {/* Degradados y Capas de Sombra (Gradient Overlays) */}
+              <div className="bg-white p-3 rounded-lg border border-gray-200 space-y-2">
+                <label className="block text-gray-700 font-bold text-xs">
+                  Degradados de Sombras sobre la Foto de Fondo (Overlays)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">Color Inicial Izquierda (Sombra Texto)</label>
+                    <div className="flex gap-2">
+                      <input type="color" value={theme.theme_hero_overlay_from.length >= 7 ? theme.theme_hero_overlay_from.slice(0,7) : '#0f1115'} onChange={e => handleColorChange('theme_hero_overlay_from', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                      <input type="text" value={theme.theme_hero_overlay_from} onChange={e => handleColorChange('theme_hero_overlay_from', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">Color Intermedio (Centro)</label>
+                    <div className="flex gap-2">
+                      <input type="color" value={theme.theme_hero_overlay_via.length >= 7 ? theme.theme_hero_overlay_via.slice(0,7) : '#0f1115'} onChange={e => handleColorChange('theme_hero_overlay_via', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                      <input type="text" value={theme.theme_hero_overlay_via} onChange={e => handleColorChange('theme_hero_overlay_via', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">Color Final Derecha (Lado Imagen)</label>
+                    <div className="flex gap-2">
+                      <input type="color" value={theme.theme_hero_overlay_to.length >= 7 ? theme.theme_hero_overlay_to.slice(0,7) : '#0f1115'} onChange={e => handleColorChange('theme_hero_overlay_to', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                      <input type="text" value={theme.theme_hero_overlay_to} onChange={e => handleColorChange('theme_hero_overlay_to', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-semibold mb-1">Degradado Inferior (Base del Banner)</label>
+                    <div className="flex gap-2">
+                      <input type="color" value={theme.theme_hero_overlay_bottom.length >= 7 ? theme.theme_hero_overlay_bottom.slice(0,7) : '#0f1115'} onChange={e => handleColorChange('theme_hero_overlay_bottom', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                      <input type="text" value={theme.theme_hero_overlay_bottom} onChange={e => handleColorChange('theme_hero_overlay_bottom', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Contenedor de Cristal y Títulos */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
@@ -511,7 +552,10 @@ const Dashboard = () => {
 
                 {/* Mini Hero Banner */}
                 <div className="relative rounded-lg p-4 text-center space-y-2 overflow-hidden border" style={{ backgroundColor: theme.theme_hero_card_bg, borderColor: theme.theme_hero_card_border }}>
-                  <img src={getImageUrl(theme.theme_hero_bg_image)} alt="Banner Preview" className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />
+                  <img src={getImageUrl(theme.theme_hero_bg_image)} alt="Banner Preview" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                  <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(to right, ${theme.theme_hero_overlay_from || '#0f1115'}, ${theme.theme_hero_overlay_via || 'rgba(15,17,21,0.9)'}, ${theme.theme_hero_overlay_to || 'rgba(15,17,21,0.2)'})` }}></div>
+                  <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(to top, ${theme.theme_hero_overlay_bottom || '#0f1115'}, transparent)` }}></div>
+                  
                   <div className="relative z-10 space-y-2">
                     <span 
                       className="inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wider border"
