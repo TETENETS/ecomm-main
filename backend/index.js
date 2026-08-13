@@ -164,6 +164,20 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// --- GENERIC FILE UPLOAD ENDPOINT ---
+app.post('/api/upload', authMiddleware, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
+    }
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ imageUrl });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).json({ error: 'Error uploading file' });
+  }
+});
+
 // --- SETTINGS ROUTES ---
 app.get('/api/settings', authMiddleware, async (req, res) => {
   try {

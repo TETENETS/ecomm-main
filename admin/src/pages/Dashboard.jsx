@@ -16,14 +16,29 @@ import {
   CheckCircle,
   RefreshCw,
   Layout,
-  Monitor
+  Monitor,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 import api from '../api';
 
+const getImageUrl = (path) => {
+  if (!path) return 'img/bg-img/bg-1.jpg';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+  const backendUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+  return `${backendUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+};
+
 const defaultTheme = {
   theme_header_bg: '#0f1115',
   theme_header_text: '#ffffff',
+  theme_hero_bg_image: 'img/bg-img/bg-1.jpg',
+  theme_hero_badge_title: 'EDICIÓN COSTA DORADA',
+  theme_hero_badge_bg: '#c2905f26',
+  theme_hero_badge_text: '#c2905f',
+  theme_hero_card_bg: '#020617b3',
+  theme_hero_card_border: '#ffffff1a',
   theme_hero_title: '#ffffff',
   theme_hero_subtitle: '#e2e8f0',
   theme_hero_btn_bg: '#c2905f',
@@ -57,6 +72,7 @@ const Dashboard = () => {
   const [theme, setTheme] = useState(defaultTheme);
   const [savingTheme, setSavingTheme] = useState(false);
   const [themeSavedSuccess, setThemeSavedSuccess] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
 
   // Paginación para órdenes pendientes
   const [currentPage, setCurrentPage] = useState(1);
@@ -94,6 +110,29 @@ const Dashboard = () => {
       }
     } catch (e) {
       console.error("Error fetching dashboard data:", e);
+    }
+  };
+
+  const handleBannerUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    setUploadingBanner(true);
+    try {
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.imageUrl) {
+        handleColorChange('theme_hero_bg_image', res.data.imageUrl);
+      }
+    } catch (err) {
+      console.error('Error uploading banner image:', err);
+      alert('Error al subir la imagen del banner.');
+    } finally {
+      setUploadingBanner(false);
     }
   };
 
@@ -249,11 +288,64 @@ const Dashboard = () => {
             </div>
 
             {/* Categoría 2: Banner Hero */}
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+              <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-amber-500"></div> 2. Banner Principal (Hero Section)
               </h3>
+              
+              {/* Carga de Imagen de Fondo */}
+              <div className="bg-white p-3 rounded-lg border border-gray-200">
+                <label className="block text-gray-700 font-bold mb-1.5 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5"><ImageIcon size={14} className="text-amber-500" /> Imagen de Fondo del Banner Principal</span>
+                  {uploadingBanner && <span className="text-[11px] text-blue-600 font-normal">Subiendo imagen...</span>}
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2 items-center">
+                  <label className="w-full sm:w-auto px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-colors">
+                    <Upload size={14} /> Subir Imagen
+                    <input type="file" accept="image/*" onChange={handleBannerUpload} className="hidden" />
+                  </label>
+                  <input type="text" value={theme.theme_hero_bg_image} onChange={e => handleColorChange('theme_hero_bg_image', e.target.value)} placeholder="URL de la imagen (ej: img/bg-img/bg-1.jpg)" className="flex-1 w-full bg-gray-50 border p-2 rounded-lg font-mono text-xs outline-none" />
+                </div>
+              </div>
+
+              {/* Etiqueta / Badge */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Texto de la Etiqueta (Badge)</label>
+                  <input type="text" value={theme.theme_hero_badge_title} onChange={e => handleColorChange('theme_hero_badge_title', e.target.value)} className="w-full bg-white border p-2 rounded-lg text-xs outline-none font-semibold" />
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Fondo de Etiqueta</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_badge_bg.length >= 7 ? theme.theme_hero_badge_bg.slice(0,7) : '#c2905f'} onChange={e => handleColorChange('theme_hero_badge_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_hero_badge_bg} onChange={e => handleColorChange('theme_hero_badge_bg', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Texto & Borde de Etiqueta</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_badge_text.length >= 7 ? theme.theme_hero_badge_text.slice(0,7) : '#c2905f'} onChange={e => handleColorChange('theme_hero_badge_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_hero_badge_text} onChange={e => handleColorChange('theme_hero_badge_text', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Contenedor de Cristal y Títulos */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Fondo de Tarjeta Oscura (Glass)</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_card_bg.length >= 7 ? theme.theme_hero_card_bg.slice(0,7) : '#020617'} onChange={e => handleColorChange('theme_hero_card_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_hero_card_bg} onChange={e => handleColorChange('theme_hero_card_bg', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-600 font-semibold mb-1">Borde de Tarjeta Oscura</label>
+                  <div className="flex gap-2">
+                    <input type="color" value={theme.theme_hero_card_border.length >= 7 ? theme.theme_hero_card_border.slice(0,7) : '#ffffff'} onChange={e => handleColorChange('theme_hero_card_border', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" />
+                    <input type="text" value={theme.theme_hero_card_border} onChange={e => handleColorChange('theme_hero_card_border', e.target.value)} className="flex-1 bg-white border p-2 rounded-lg font-mono outline-none" />
+                  </div>
+                </div>
                 <div>
                   <label className="block text-gray-600 font-semibold mb-1">Título del Banner</label>
                   <div className="flex gap-2">
@@ -269,22 +361,20 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">Botón Principal (Comprar ahora)</label>
+                  <label className="block text-gray-600 font-semibold mb-1">Botón Principal (Fondo | Texto/Flechas | Borde)</label>
                   <div className="flex gap-2">
                     <input type="color" value={theme.theme_hero_btn_bg} onChange={e => handleColorChange('theme_hero_btn_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Fondo" />
-                    <input type="color" value={theme.theme_hero_btn_text} onChange={e => handleColorChange('theme_hero_btn_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Texto" />
+                    <input type="color" value={theme.theme_hero_btn_text} onChange={e => handleColorChange('theme_hero_btn_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Texto y Flecha" />
                     <input type="color" value={theme.theme_hero_btn_border} onChange={e => handleColorChange('theme_hero_btn_border', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Borde" />
                   </div>
-                  <span className="text-[10px] text-gray-400">Iconos: Fondo | Texto | Borde</span>
                 </div>
                 <div>
-                  <label className="block text-gray-600 font-semibold mb-1">Botón Secundario (Ver líneas)</label>
+                  <label className="block text-gray-600 font-semibold mb-1">Botón Secundario (Fondo | Texto | Borde)</label>
                   <div className="flex gap-2">
                     <input type="color" value={theme.theme_hero_btn2_bg} onChange={e => handleColorChange('theme_hero_btn2_bg', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Fondo" />
                     <input type="color" value={theme.theme_hero_btn2_text} onChange={e => handleColorChange('theme_hero_btn2_text', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Texto" />
                     <input type="color" value={theme.theme_hero_btn2_border} onChange={e => handleColorChange('theme_hero_btn2_border', e.target.value)} className="w-9 h-9 rounded cursor-pointer border" title="Borde" />
                   </div>
-                  <span className="text-[10px] text-gray-400">Iconos: Fondo | Texto | Borde</span>
                 </div>
               </div>
             </div>
@@ -420,36 +510,49 @@ const Dashboard = () => {
                 </div>
 
                 {/* Mini Hero Banner */}
-                <div className="relative rounded-lg p-4 bg-slate-950/80 border border-white/10 text-center space-y-2">
-                  <div className="font-serif font-bold text-base leading-tight drop-shadow" style={{ color: theme.theme_hero_title }}>
-                    El lujo del mar en tu piel
-                  </div>
-                  <p className="text-[10px] max-w-xs mx-auto opacity-90" style={{ color: theme.theme_hero_subtitle }}>
-                    Fragancias y cuidado corporal de alta gama.
-                  </p>
-                  <div className="flex justify-center gap-2 pt-1">
-                    <button 
-                      className="px-3 py-1 rounded-full font-bold text-[9px] shadow"
+                <div className="relative rounded-lg p-4 text-center space-y-2 overflow-hidden border" style={{ backgroundColor: theme.theme_hero_card_bg, borderColor: theme.theme_hero_card_border }}>
+                  <img src={getImageUrl(theme.theme_hero_bg_image)} alt="Banner Preview" className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />
+                  <div className="relative z-10 space-y-2">
+                    <span 
+                      className="inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wider border"
                       style={{ 
-                        backgroundColor: theme.theme_hero_btn_bg, 
-                        color: theme.theme_hero_btn_text,
-                        borderColor: theme.theme_hero_btn_border,
-                        borderWidth: '1px'
+                        backgroundColor: theme.theme_hero_badge_bg, 
+                        color: theme.theme_hero_badge_text,
+                        borderColor: theme.theme_hero_badge_text 
                       }}
                     >
-                      Comprar ahora
-                    </button>
-                    <button 
-                      className="px-3 py-1 rounded-full font-bold text-[9px] shadow"
-                      style={{ 
-                        backgroundColor: theme.theme_hero_btn2_bg, 
-                        color: theme.theme_hero_btn2_text,
-                        borderColor: theme.theme_hero_btn2_border,
-                        borderWidth: '1px'
-                      }}
-                    >
-                      Ver líneas
-                    </button>
+                      {theme.theme_hero_badge_title || 'EDICIÓN COSTA DORADA'}
+                    </span>
+                    <div className="font-serif font-bold text-base leading-tight drop-shadow" style={{ color: theme.theme_hero_title }}>
+                      El lujo del mar en tu piel
+                    </div>
+                    <p className="text-[10px] max-w-xs mx-auto opacity-90" style={{ color: theme.theme_hero_subtitle }}>
+                      Fragancias y cuidado corporal de alta gama.
+                    </p>
+                    <div className="flex justify-center gap-2 pt-1">
+                      <button 
+                        className="px-3 py-1 rounded-full font-bold text-[9px] shadow flex items-center gap-1"
+                        style={{ 
+                          backgroundColor: theme.theme_hero_btn_bg, 
+                          color: theme.theme_hero_btn_text,
+                          borderColor: theme.theme_hero_btn_border,
+                          borderWidth: '1px'
+                        }}
+                      >
+                        Comprar ahora →
+                      </button>
+                      <button 
+                        className="px-3 py-1 rounded-full font-bold text-[9px] shadow"
+                        style={{ 
+                          backgroundColor: theme.theme_hero_btn2_bg, 
+                          color: theme.theme_hero_btn2_text,
+                          borderColor: theme.theme_hero_btn2_border,
+                          borderWidth: '1px'
+                        }}
+                      >
+                        Ver líneas
+                      </button>
+                    </div>
                   </div>
                 </div>
 

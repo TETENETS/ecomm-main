@@ -26,6 +26,10 @@ async function loadThemeSettings() {
             if (settings.theme_hero_btn2_bg) root.style.setProperty('--theme-hero-btn2-bg', settings.theme_hero_btn2_bg);
             if (settings.theme_hero_btn2_text) root.style.setProperty('--theme-hero-btn2-text', settings.theme_hero_btn2_text);
             if (settings.theme_hero_btn2_border) root.style.setProperty('--theme-hero-btn2-border', settings.theme_hero_btn2_border);
+            if (settings.theme_hero_badge_bg) root.style.setProperty('--theme-hero-badge-bg', settings.theme_hero_badge_bg);
+            if (settings.theme_hero_badge_text) root.style.setProperty('--theme-hero-badge-text', settings.theme_hero_badge_text);
+            if (settings.theme_hero_card_bg) root.style.setProperty('--theme-hero-card-bg', settings.theme_hero_card_bg);
+            if (settings.theme_hero_card_border) root.style.setProperty('--theme-hero-card-border', settings.theme_hero_card_border);
             if (settings.theme_card_title) root.style.setProperty('--theme-card-title', settings.theme_card_title);
             if (settings.theme_card_price) root.style.setProperty('--theme-card-price', settings.theme_card_price);
             if (settings.theme_btn_cart_bg) root.style.setProperty('--theme-btn-cart-bg', settings.theme_btn_cart_bg);
@@ -36,6 +40,15 @@ async function loadThemeSettings() {
             if (settings.theme_placeholder_text) root.style.setProperty('--theme-placeholder-text', settings.theme_placeholder_text);
             if (settings.theme_footer_bg) root.style.setProperty('--theme-footer-bg', settings.theme_footer_bg);
             if (settings.theme_footer_text) root.style.setProperty('--theme-footer-text', settings.theme_footer_text);
+            
+            if (settings.theme_hero_bg_image) {
+                const bgImgEl = document.getElementById('hero-bg-img');
+                if (bgImgEl) bgImgEl.src = getImageUrl(settings.theme_hero_bg_image);
+            }
+            if (settings.theme_hero_badge_title) {
+                const badgeTextEl = document.getElementById('hero-badge-text-content');
+                if (badgeTextEl) badgeTextEl.textContent = settings.theme_hero_badge_title;
+            }
             
             let styleTag = document.getElementById('dynamic-theme-styles');
             if (!styleTag) {
@@ -67,26 +80,26 @@ document.addEventListener('DOMContentLoaded', () => {
             
             <main class="flex-1">
                 <!-- Hero Section -->
-                <section id="inicio" class="relative -mt-[68px] flex min-h-[88vh] items-center overflow-hidden md:-mt-[80px] bg-[#0f1115]">
-                  <img src="img/bg-img/bg-1.jpg" class="object-cover absolute inset-0 w-full h-full object-right md:object-center opacity-90" alt="Hero background" />
+                <section id="inicio" class="relative -mt-[68px] flex min-h-[88vh] items-center overflow-hidden md:-mt-[80px]" style="background-color: var(--theme-page-bg, #0f1115);">
+                  <img id="hero-bg-img" src="img/bg-img/bg-1.jpg" class="object-cover absolute inset-0 w-full h-full object-right md:object-center opacity-90 transition-all duration-300" alt="Hero background" />
                   <div class="absolute inset-0 bg-gradient-to-r from-[#0f1115] via-[#0f1115]/90 to-[#0f1115]/20"></div>
                   <div class="absolute inset-0 bg-gradient-to-t from-[#0f1115] via-transparent to-transparent"></div>
                   <div class="relative mx-auto w-full max-w-7xl px-4 pt-28 pb-16 md:px-8">
-                    <div class="max-w-xl rounded-3xl bg-slate-950/70 p-6 md:p-8 backdrop-blur-md border border-white/10 shadow-2xl">
-                      <span class="inline-flex items-center gap-2 rounded-full border border-[#c2905f]/40 bg-[#c2905f]/15 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-[#c2905f]">
-                        Edición Costa Dorada
+                    <div id="hero-glass-card" class="max-w-xl rounded-3xl p-6 md:p-8 backdrop-blur-md shadow-2xl transition-all" style="background-color: var(--theme-hero-card-bg, rgba(2, 6, 23, 0.7)); border: 1px solid var(--theme-hero-card-border, rgba(255, 255, 255, 0.1));">
+                      <span id="hero-badge" class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] transition-all" style="background-color: var(--theme-hero-badge-bg, rgba(194, 144, 95, 0.15)); color: var(--theme-hero-badge-text, #c2905f); border: 1px solid var(--theme-hero-badge-text, #c2905f);">
+                        <span id="hero-badge-text-content">Edición Costa Dorada</span>
                       </span>
-                      <h1 class="mt-4 font-heading text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl drop-shadow">
+                      <h1 id="hero-title" class="mt-4 font-heading text-4xl font-bold leading-tight sm:text-5xl md:text-6xl drop-shadow transition-colors" style="color: var(--theme-hero-title, #ffffff);">
                         El lujo del mar en tu piel
                       </h1>
-                      <p class="mt-4 max-w-md text-base leading-relaxed text-slate-200 md:text-lg">
+                      <p id="hero-subtitle" class="mt-4 max-w-md text-base leading-relaxed md:text-lg transition-colors" style="color: var(--theme-hero-subtitle, #e2e8f0);">
                         Fragancias y cuidado corporal de alta gama inspirados en la brisa, la arena y los tesoros del océano. Descubre la colección Kavala.
                       </p>
                       <div class="mt-8 flex flex-wrap items-center gap-4">
-                        <a href="#main-catalog-section" class="group inline-flex items-center gap-2 rounded-full bg-[#c2905f] hover:bg-[#d4a373] px-7 py-3.5 text-xs md:text-sm font-bold uppercase tracking-widest text-white shadow-xl shadow-[#c2905f]/30 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                          Comprar ahora <i data-lucide="arrow-right" class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"></i>
+                        <a id="hero-btn-primary" href="#main-catalog-section" class="group inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-xs md:text-sm font-bold uppercase tracking-widest transition-all duration-300 hover:-translate-y-0.5 shadow-xl cursor-pointer" style="background-color: var(--theme-hero-btn-bg, #c2905f); color: var(--theme-hero-btn-text, #ffffff); border: 1px solid var(--theme-hero-btn-border, #c2905f);">
+                          <span>Comprar ahora</span> <i data-lucide="arrow-right" class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" style="color: var(--theme-hero-btn-text, #ffffff);"></i>
                         </a>
-                        <a href="#lineas" class="inline-flex items-center gap-2 rounded-full border-2 border-white/80 hover:border-[#c2905f] bg-slate-900/80 hover:bg-[#c2905f] px-7 py-3.5 text-xs md:text-sm font-bold uppercase tracking-widest text-white transition-all duration-300 shadow-lg cursor-pointer">
+                        <a id="hero-btn-secondary" href="#lineas" class="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-xs md:text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-lg cursor-pointer" style="background-color: var(--theme-hero-btn2-bg, #1e293b); color: var(--theme-hero-btn2-text, #ffffff); border: 1px solid var(--theme-hero-btn2-border, #ffffff);">
                           Ver líneas
                         </a>
                       </div>
